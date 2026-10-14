@@ -7,6 +7,7 @@
 #include "config.h"
 #include "config_drive.h"
 #include "decoupling.h"
+#include "game_mode.h"
 #include "normalization.h"
 #include "settings.h"
 
@@ -44,6 +45,28 @@ namespace Configurator {
                 Serial.print(static_cast<long>(lroundf(values[i] * scale)));
             }
             Serial.print(']');
+        }
+
+        void handle_game_mode_set()
+        {
+            GameMode::Config config = GameMode::get();
+            float values[2 + GameMode::BINDING_COUNT];
+            for (size_t i = 0; i < sizeof(values) / sizeof(values[0]); ++i) {
+                char* value_text = strtok(nullptr, " \t");
+                char* end = nullptr;
+                values[i] = value_text != nullptr ? strtof(value_text, &end) : 0.0f;
+                if (value_text == nullptr || end == value_text || !isfinite(values[i]) || (i >= 2 && (values[i] < 0.0f || values[i] > 255.0f))) {
+                    print_error("usage: gm_set <tt> <rt> <14 key codes>");
+                    return;
+                }
+            }
+            config.translation_threshold = values[0];
+            config.rotation_threshold = values[1];
+            for (int i = 0; i < GameMode::BINDING_COUNT; ++i) {
+                config.keys[i] = static_cast<uint8_t>(values[2 + i]);
+            }
+            GameMode::set(config);
+            GameMode::print_json(Serial);
         }
 
         void handle_decoupling_set()
@@ -174,6 +197,28 @@ namespace Configurator {
                 Decoupling::publish(Decoupling::identity());
                 Decoupling::print_json(Serial);
             }
+            else if (strcmp(command, "gm_get") == 0) {
+                GameMode::print_json(Serial);
+            }
+            else if (strcmp(command, "gm_set") == 0) {
+                handle_game_mode_set();
+            }
+            else if (strcmp(command, "gm_on") == 0) {
+                char* argument = strtok(nullptr, " \t");
+                return argument != nullptr && atoi(argument) != 0 ? Request::GAME_MODE_ON : Request::GAME_MODE_OFF;
+            }
+            else if (strcmp(command, "gm_save") == 0) {
+                if (GameMode::save()) {
+                    print_ok("gm_save");
+                }
+                else {
+                    print_error("gm_save failed");
+                }
+            }
+            else if (strcmp(command, "gm_defaults") == 0) {
+                GameMode::set(GameMode::defaults());
+                GameMode::print_json(Serial);
+            }
             else if (strcmp(command, "info") == 0) {
                 print_info(dipole_model);
             }
@@ -262,6 +307,10 @@ namespace Configurator {
         Serial.print(telemetry.buttons);
         Serial.print(",\"hz\":");
         Serial.print(static_cast<long>(lroundf(telemetry.filter_hz)));
+        Serial.print(",\"gm\":");
+        Serial.print(telemetry.game_mode ? 1 : 0);
+        Serial.print(",\"gk\":");
+        Serial.print(telemetry.game_keys);
         print_scaled_array("p", telemetry.pose, 6, 1000.0f);
         print_scaled_array("o", telemetry.output, 6, 1000.0f);
         print_scaled_array("az", rest_offset, 6, 1000.0f);

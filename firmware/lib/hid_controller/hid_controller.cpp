@@ -37,6 +37,10 @@ namespace {
 
       HID_COLLECTION_END, // END_COLLECTION
     };
+
+    const uint8_t keyboard_report_descriptor[] = {
+      TUD_HID_REPORT_DESC_KEYBOARD(),
+    };
 }
 
 bool HIDController::begin()
@@ -51,6 +55,12 @@ bool HIDController::begin()
     m_hid.setReportDescriptor(hid_report_descriptor, sizeof(hid_report_descriptor));
     m_hid.setPollInterval(HID_REPORT_INTERVAL_MS);
     m_hid.begin();
+
+    // Separate boot keyboard interface for game mode, so the 3D mouse interface stays unchanged
+    m_keyboard.setBootProtocol(HID_ITF_PROTOCOL_KEYBOARD);
+    m_keyboard.setReportDescriptor(keyboard_report_descriptor, sizeof(keyboard_report_descriptor));
+    m_keyboard.setPollInterval(2);
+    m_keyboard.begin();
 
     // If already enumerated, additional class driverr begin() e.g msc, hid, midi won't take effect until re-enumeration
     if (TinyUSBDevice.mounted()) {
@@ -125,6 +135,29 @@ void HIDController::sendReport(float filtered_state[12], uint16_t buttons, bool 
     task();
 
     m_last_sent_time_ms = now; // Update the timestamp of the last sent report
+}
+
+void HIDController::sendKeyboard(uint8_t modifier, const uint8_t keys[6])
+{
+    const bool changed = modifier != m_keyboard_modifier || memcmp(keys, m_keyboard_keys, 6) != 0;
+    if (!changed && !m_keyboard_pending) {
+        return;
+    }
+    m_keyboard_modifier = modifier;
+    memcpy(m_keyboard_keys, keys, 6);
+
+    task();
+    if (!TinyUSBDevice.mounted() || !m_keyboard.ready()) {
+        m_keyboard_pending = true; // Retry on the next loop
+        return;
+    }
+    if (TinyUSBDevice.suspended()) {
+        TinyUSBDevice.remoteWakeup();
+    }
+    m_keyboard.keyboardReport(0, m_keyboard_modifier, m_keyboard_keys);
+    task();
+    m_keyboard_pending = false;
+    m_last_sent_time_ms = millis();
 }
 
 uint32_t HIDController::get_last_report_time_ms()

@@ -29,6 +29,7 @@
 #define LED_CALIBRATION_FAILURE_COLOR 0xFF00FF         // Magenta
 #define LED_RUNNING_COLOR 0xFFFFFF                     // White
 #define LED_RUNNING_WITHOUT_CALIBRATION_COLOR 0xFF6600 // Orange
+#define LED_GAME_MODE_COLOR 0x6000FF                   // Violet
 
 // Input glow effect during normal running
 #define LED_USE_INPUT_GLOW_EFFECT true    // Set false to disable LED input glow effect

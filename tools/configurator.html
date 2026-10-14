@@ -221,6 +221,24 @@
   table.result td { padding: 4px 6px; border-bottom: 1px solid var(--line); }
   table.result td.num, table.result th.num { text-align: right; }
   .better { color: var(--ok); }
+
+  /* Game mode */
+  .bindings { display: grid; grid-template-columns: minmax(0, 1fr) 120px 32px; gap: 6px 10px; align-items: center; margin-top: 12px; }
+  .bindings .name { color: var(--text); }
+  .bindings .name span { color: var(--muted); font-size: 12px; }
+  .keycap {
+    font: 600 13px/1 ui-monospace, Consolas, monospace;
+    padding: 7px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    color: var(--text);
+    text-align: center;
+  }
+  .keycap.empty { color: var(--muted); font-weight: 400; }
+  .keycap.listening { border-color: var(--accent); color: var(--accent); }
+  .keycap.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .clear { padding: 4px 0; text-align: center; color: var(--muted); }
   .worse { color: var(--err); }
 </style>
 </head>
@@ -232,6 +250,7 @@
     <span class="chip hidden" id="chipState"></span>
     <span class="chip hidden" id="chipRate"></span>
     <span class="chip hidden" id="chipCal"></span>
+    <span class="chip hidden" id="chipGame" style="color:#8b5cf6">Игровой режим</span>
   </div>
   <button class="primary" id="btnConnect">Подключить мышь</button>
 </header>
@@ -318,6 +337,28 @@
       <h2>Чувствительность</h2>
       <p class="hint" style="margin-top:0">Ход ручки, при котором мышь выдаёт полную скорость. Меньше — чувствительнее. Можно задать разные значения для каждого направления.</p>
       <div class="sens" id="sens" style="margin-top:12px"></div>
+    </section>
+
+    <section class="card">
+      <h2>Игровой режим</h2>
+      <p class="hint" style="margin-top:0">Ручка и кнопки нажимают клавиши вместо 3D-мыши, например WASD для раскладки эмулятора. Включается долгим нажатием правой кнопки (1,5 с, три фиолетовые вспышки) или кнопкой ниже. После подключения мышь всегда в режиме CAD.</p>
+      <div class="actions" style="margin-top:10px">
+        <button class="primary" id="btnGmToggle" disabled>Включить</button>
+        <button id="btnGmSave" disabled>Сохранить в мышь</button>
+        <button id="btnGmDefaults" disabled>Раскладка PUBG (GameLoop)</button>
+      </div>
+      <div class="status-line" id="gmStatus"></div>
+      <div class="field">
+        <div class="field-head"><label for="gmTt">Порог сдвига</label><span id="gmTtValue"></span></div>
+        <div class="field-row"><input type="range" id="gmTt" min="0.1" max="0.9" step="0.05" disabled><span></span></div>
+      </div>
+      <div class="field">
+        <div class="field-head"><label for="gmRt">Порог наклона и поворота</label><span id="gmRtValue"></span></div>
+        <div class="field-row"><input type="range" id="gmRt" min="0.1" max="0.9" step="0.05" disabled><span></span></div>
+        <p class="hint">Доля хода из раздела «Чувствительность», при которой нажимается клавиша. Отпускается она на 70% от порога.</p>
+      </div>
+      <div class="bindings" id="bindings"></div>
+      <p class="hint">Нажмите на клавишу в таблице, затем нужную клавишу на клавиатуре. Esc отменяет выбор, × убирает клавишу.</p>
     </section>
 
     <section class="card">
@@ -492,7 +533,9 @@ function showValue(key, value, fromUser) {
 
 function setEnabled(enabled) {
   for (const c of Object.values(controls)) { c.range.disabled = !enabled; c.number.disabled = !enabled; }
-  for (const id of ["btnSave", "btnReload", "btnDefaults", "btnCalibrate", "btnDcStart", "btnDcToggle", "btnDcSave", "btnDcReset", "btnDrive"]) $(id).disabled = !enabled;
+  for (const id of ["btnSave", "btnReload", "btnDefaults", "btnCalibrate", "btnDcStart", "btnDcToggle", "btnDcSave", "btnDcReset", "btnDrive",
+                    "btnGmToggle", "btnGmSave", "btnGmDefaults", "gmTt", "gmRt"]) $(id).disabled = !enabled;
+  for (const { cap, clear } of gmCaps) { cap.disabled = !enabled; clear.disabled = !enabled; }
 }
 
 // ---------- Serial ----------
@@ -532,6 +575,7 @@ async function connect(chosenPort) {
     await send("info");
     await send("get");
     await send("dc_get");
+    await send("gm_get");
     setTimeout(() => { if (port && !gotSettings) $("oldFirmware").classList.remove("hidden"); }, 2500);
   } catch (e) {
     if (e.name !== "NotFoundError") log("Не удалось подключиться: " + e.message, "err");
@@ -588,6 +632,9 @@ function setConnected(connected) {
     $("oldFirmware").classList.add("hidden");
     if (wizard) { wizard = null; $("dcWizard").classList.add("hidden"); status("dcStatus", "Измерение прервано: мышь отключилась", "err"); }
     dcSaved = null;
+    gmSaved = null;
+    gmListening = -1;
+    $("chipGame").classList.add("hidden");
   }
 }
 
@@ -601,17 +648,20 @@ function handleLine(line) {
     case "settings": onSettings(msg.v); break;
     case "info": onInfo(msg); log("← сведения о прошивке получены", "muted"); break;
     case "dc": onDecoupling(msg); break;
+    case "gm": onGameMode(msg); break;
     case "ok":
       log("← готово: " + msg.cmd, "muted");
       if (msg.cmd === "save") { saved = { ...settings }; updateDirty(); status("saveStatus", "Сохранено в мышь", "ok"); }
       if (msg.cmd === "dc_save" && dcState) { dcSaved = JSON.stringify(dcState); dcNotice = null; onDecoupling(dcState); }
       if (msg.cmd === "drive") log("Мышь перезагружается с диском CADMOUSE", "muted");
+      if (msg.cmd === "gm_save" && gmState) { gmSaved = JSON.stringify({ tt: gmState.tt, rt: gmState.rt, k: gmState.k }); renderGame(); }
       break;
     case "err":
       log("← ошибка: " + msg.msg, "err");
       if (msg.msg === "save failed") status("saveStatus", "Не удалось сохранить", "err");
       if (msg.msg === "no saved settings") status("saveStatus", "В мыши нет сохранённых настроек", "warn");
       if (msg.msg === "dc_save failed") status("dcStatus", "Не удалось сохранить развязку", "err");
+      if (msg.msg === "gm_save failed") status("gmStatus", "Не удалось сохранить клавиши", "err");
       break;
     default: log(line);
   }
@@ -678,6 +728,7 @@ function onTelemetry(t) {
 
   trackCalibration(t);
   trackWizard(t);
+  onGameTelemetry(t);
 }
 
 function placeBar(el, value) {
@@ -913,6 +964,117 @@ function finishWizard() {
   send("dc_on 1");
 }
 
+// ---------- Game mode ----------
+
+// Order matches GameMode::Binding in firmware/lib/game_mode/game_mode.h
+const GM_BINDINGS = [
+  ["Сдвиг вправо", "X+"], ["Сдвиг влево", "X−"], ["Сдвиг от себя", "Y+"], ["Сдвиг на себя", "Y−"],
+  ["Потянуть вверх", "Z+"], ["Надавить вниз", "Z−"], ["Наклон на себя", "RX+"], ["Наклон от себя", "RX−"],
+  ["Наклон вправо", "RY+"], ["Наклон влево", "RY−"], ["Поворот против часовой", "RZ+"], ["Поворот по часовой", "RZ−"],
+  ["Левая кнопка", ""], ["Правая кнопка", ""],
+];
+// Browser KeyboardEvent.code -> HID keyboard usage ID and label
+const HID_KEYS = {};
+"ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").forEach((c, i) => { HID_KEYS["Key" + c] = [0x04 + i, c]; });
+"1234567890".split("").forEach((c, i) => { HID_KEYS["Digit" + c] = [0x1E + i, c]; });
+for (let i = 1; i <= 12; i++) HID_KEYS["F" + i] = [0x39 + i, "F" + i];
+"1234567890".split("").forEach((c, i) => { HID_KEYS["Numpad" + c] = [0x59 + i, "Num " + c]; });
+Object.assign(HID_KEYS, {
+  Enter: [0x28, "Enter"], Escape: [0x29, "Esc"], Backspace: [0x2A, "Backspace"], Tab: [0x2B, "Tab"],
+  Space: [0x2C, "Пробел"], Minus: [0x2D, "-"], Equal: [0x2E, "="], BracketLeft: [0x2F, "["], BracketRight: [0x30, "]"],
+  Backslash: [0x31, "\\"], Semicolon: [0x33, ";"], Quote: [0x34, "'"], Backquote: [0x35, "`"], Comma: [0x36, ","],
+  Period: [0x37, "."], Slash: [0x38, "/"], CapsLock: [0x39, "Caps Lock"], Insert: [0x49, "Insert"], Home: [0x4A, "Home"],
+  PageUp: [0x4B, "PgUp"], Delete: [0x4C, "Delete"], End: [0x4D, "End"], PageDown: [0x4E, "PgDn"],
+  ArrowRight: [0x4F, "→"], ArrowLeft: [0x50, "←"], ArrowDown: [0x51, "↓"], ArrowUp: [0x52, "↑"],
+  NumpadDivide: [0x54, "Num /"], NumpadMultiply: [0x55, "Num *"], NumpadSubtract: [0x56, "Num -"], NumpadAdd: [0x57, "Num +"],
+  NumpadEnter: [0x58, "Num Enter"], NumpadDecimal: [0x63, "Num ."],
+  ControlLeft: [0xE0, "Ctrl"], ShiftLeft: [0xE1, "Shift"], AltLeft: [0xE2, "Alt"],
+  ControlRight: [0xE4, "Ctrl прав."], ShiftRight: [0xE5, "Shift прав."], AltRight: [0xE6, "Alt прав."],
+});
+const HID_LABELS = {};
+for (const [hid, label] of Object.values(HID_KEYS)) HID_LABELS[hid] = label;
+
+let gmState = null;     // { on, tt, rt, k: [14] } as reported by the mouse
+let gmSaved = null;     // config known to be stored in the mouse
+let gmListening = -1;   // binding index waiting for a key press
+const gmCaps = [];
+
+function buildBindings() {
+  const root = $("bindings");
+  GM_BINDINGS.forEach(([name, axis], i) => {
+    const label = document.createElement("div");
+    label.className = "name";
+    label.innerHTML = name + (axis ? ` <span>${axis}</span>` : "");
+    const cap = document.createElement("button");
+    cap.className = "keycap empty";
+    cap.disabled = true;
+    cap.addEventListener("click", () => listenForKey(i));
+    const clear = document.createElement("button");
+    clear.className = "clear";
+    clear.textContent = "×";
+    clear.title = "Убрать клавишу";
+    clear.disabled = true;
+    clear.addEventListener("click", () => { if (gmState) { gmState.k[i] = 0; sendGameConfig(); renderGame(); } });
+    root.append(label, cap, clear);
+    gmCaps.push({ cap, clear });
+  });
+}
+
+function listenForKey(index) {
+  gmListening = gmListening === index ? -1 : index;
+  renderGame();
+}
+
+document.addEventListener("keydown", e => {
+  if (gmListening < 0) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (e.code === "Escape") { gmListening = -1; renderGame(); return; }
+  const key = HID_KEYS[e.code];
+  if (!key) { status("gmStatus", "Эту клавишу назначить нельзя", "err"); return; }
+  gmState.k[gmListening] = key[0];
+  gmListening = -1;
+  sendGameConfig();
+  renderGame();
+}, true);
+
+let gmTimer = null;
+function sendGameConfig() {
+  clearTimeout(gmTimer);
+  gmTimer = setTimeout(() => send(`gm_set ${gmState.tt} ${gmState.rt} ${gmState.k.join(" ")}`), 120);
+}
+
+function onGameMode(msg) {
+  gmState = { on: msg.on, tt: msg.tt, rt: msg.rt, k: msg.k.slice() };
+  if (gmSaved === null) gmSaved = JSON.stringify({ tt: msg.tt, rt: msg.rt, k: msg.k });
+  renderGame();
+}
+
+function renderGame(activeMask) {
+  if (!gmState) return;
+  $("btnGmToggle").textContent = gmState.on ? "Выключить" : "Включить";
+  $("chipGame").classList.toggle("hidden", !gmState.on || !port);
+  if (document.activeElement !== $("gmTt")) $("gmTt").value = gmState.tt;
+  if (document.activeElement !== $("gmRt")) $("gmRt").value = gmState.rt;
+  $("gmTtValue").textContent = Math.round(gmState.tt * 100) + "%";
+  $("gmRtValue").textContent = Math.round(gmState.rt * 100) + "%";
+  gmCaps.forEach(({ cap }, i) => {
+    const code = gmState.k[i];
+    cap.textContent = gmListening === i ? "нажмите…" : (code ? (HID_LABELS[code] || "0x" + code.toString(16)) : "—");
+    cap.classList.toggle("empty", !code && gmListening !== i);
+    cap.classList.toggle("listening", gmListening === i);
+    if (activeMask !== undefined) cap.classList.toggle("on", gmState.on && (activeMask & (1 << i)) !== 0);
+  });
+  const saved = JSON.stringify({ tt: gmState.tt, rt: gmState.rt, k: gmState.k }) === gmSaved;
+  status("gmStatus", (gmState.on ? "Игровой режим включён" : "Игровой режим выключен") + (saved ? "" : " · не сохранено"), saved ? (gmState.on ? "ok" : "") : "warn");
+}
+
+function onGameTelemetry(t) {
+  if (!gmState || t.gm === undefined) return;
+  if (gmState.on !== t.gm) { gmState.on = t.gm; }
+  renderGame(t.gk);
+}
+
 // ---------- Wiring ----------
 
 $("btnConnect").addEventListener("click", () => port ? disconnect() : connect());
@@ -926,6 +1088,12 @@ $("btnDcToggle").addEventListener("click", () => { dcNotice = null; send("dc_on 
 $("btnDcSave").addEventListener("click", () => { dcNotice = null; send("dc_save"); });
 $("btnDcReset").addEventListener("click", () => { dcNotice = null; $("dcResult").innerHTML = ""; send("dc_reset"); });
 $("btnDrive").addEventListener("click", () => send("drive"));
+$("btnGmToggle").addEventListener("click", () => send("gm_on " + (gmState && gmState.on ? 0 : 1)));
+$("btnGmSave").addEventListener("click", () => send("gm_save"));
+$("btnGmDefaults").addEventListener("click", () => send("gm_defaults"));
+for (const [id, key] of [["gmTt", "tt"], ["gmRt", "rt"]]) {
+  $(id).addEventListener("input", () => { if (gmState) { gmState[key] = parseFloat($(id).value); renderGame(); sendGameConfig(); } });
+}
 $("btnCalibrate").addEventListener("click", () => {
   calibration = { phase: "requested" };
   status("calStatus", "Запуск калибровки…", "warn");
@@ -941,6 +1109,7 @@ $("btnCalibrate").addEventListener("click", () => {
 
 buildAxes();
 buildSettings();
+buildBindings();
 
 if (!("serial" in navigator)) {
   $("noSerial").classList.remove("hidden");
