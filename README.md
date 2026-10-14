@@ -21,6 +21,37 @@ The USB VID/PID are set to the 3Dconnexion SpaceMouse Compact (`256F:C635`), so
 3DxWare picks the mouse up. See the [firmware documentation](./firmware/README.md)
 for details.
 
+## Web configurator
+
+![Web configurator](./images/configurator.png)
+
+`tools/configurator.html` is a single page that talks to the mouse over USB with
+Web Serial. Open it in Chrome or Edge and click "Подключить мышь" (the page is in
+Russian). Nothing has to be installed, and it works offline.
+
+- **Live view** of all six axes: the knob position before the deadzones and what
+  is sent to the computer, plus the buttons. Axes leaking into each other are
+  visible at a glance.
+- **Settings that apply immediately**: translation and rotation deadzones,
+  cross-axis deadzone, isolation strength, auto zero, sensitivity for each
+  direction of every axis, filter responsiveness and smoothing, sleep timeout.
+  "Сохранить в мышь" stores them in the mouse; saved settings override the
+  firmware defaults.
+- **Calibration** from the page, with the result and the calibrated magnet
+  moments and offsets.
+- **Axis decoupling wizard**: move the knob in 12 directions, the page measures
+  how the other axes respond and removes that with a 6x6 matrix stored in the
+  mouse. Afterwards the isolation can be relaxed for more natural combined
+  movements.
+
+**The page is also on the mouse.** Hold one button while plugging the mouse in
+and it additionally shows up as a read-only USB drive `CADMOUSE` with
+`configurator.html` (do not hold both buttons, that starts a calibration). Plug
+it in again without a button to hide the drive.
+
+The serial protocol and the firmware side are described in the
+[firmware documentation](./firmware/README.md#configurator).
+
 ## Original project
 
 Watch the build video ↓
