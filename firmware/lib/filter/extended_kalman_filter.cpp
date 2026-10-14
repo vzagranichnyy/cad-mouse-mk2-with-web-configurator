@@ -34,14 +34,19 @@ void ExtendedKalmanFilter::init(const float initial_state[6], float process_nois
     for (int i = 6; i < 12; ++i)
         m_P[i][i] = 1.0f;
 
+    set_noise(process_noise_std, sensor_noise_std);
+
+    std::memset(m_cached_H, 0, sizeof(m_cached_H));
+}
+
+void ExtendedKalmanFilter::set_noise(float process_noise_std, float sensor_noise_std)
+{
     m_R_var = sensor_noise_std * sensor_noise_std;
 
     m_Q_pos = 0.01f * process_noise_std;
     m_Q_rot = 0.01f * process_noise_std;
     m_Q_vel = 1.0f * process_noise_std;
     m_Q_ang_vel = 1.0f * process_noise_std;
-
-    std::memset(m_cached_H, 0, sizeof(m_cached_H));
 }
 
 void ExtendedKalmanFilter::predict(float dt)

@@ -98,8 +98,8 @@
 #define CALIBRATION_FIT_RX_MAX 1.0f  // degrees; must be >= RX_MIN
 #define CALIBRATION_FIT_RY_MIN -1.0f // degrees; must be <= RY_MAX
 #define CALIBRATION_FIT_RY_MAX 1.0f  // degrees; must be >= RY_MIN
-#define CALIBRATION_FIT_RZ_MIN -1.0f // degrees; must be <= RZ_MAX
-#define CALIBRATION_FIT_RZ_MAX 1.0f  // degrees; must be >= RZ_MIN
+#define CALIBRATION_FIT_RZ_MIN -3.0f // degrees; must be <= RZ_MAX; wider than rx/ry, the knob can be assembled slightly turned
+#define CALIBRATION_FIT_RZ_MAX 3.0f  // degrees; must be >= RZ_MIN
 
 // =============================================================================
 // DIPOLE MODEL
@@ -124,6 +124,8 @@
 // =============================================================================
 // POSTPROCESSING
 // Normalization, deadzones, and 6DoF dominant-axis isolation.
+// These, the EKF noise values and the inactivity timeout are only defaults:
+// values saved from tools/configurator.html override them on boot.
 // =============================================================================
 //
 // Physics model assumes (USB port facing away from user):
@@ -154,6 +156,8 @@
 
 #define DEADZONE_TRANSLATION_THRESHOLD 0.05f // Normalized x/y/z magnitude; 0.05 = 5% deadzone
 #define DEADZONE_ROTATION_THRESHOLD 0.05f    // Normalized rx/ry/rz magnitude; 0.05 = 5% deadzone
+#define DEADZONE_CROSS_AXIS_RATIO 0.0f       // 0..<1; axes weaker than this share of the strongest axis are ignored, stronger ones shrink smoothly; 0 = off
+#define AUTO_ZERO_TIME_CONSTANT_S 0.0f       // >= 0; seconds to follow the rest pose while inside the deadzones; 0 = off
 #define ISOLATION_POWER 3.0f                 // > 0; 1=no curve, 3=cubic; 1, 2, 3, 0.5 optimized
 
 // =============================================================================
@@ -168,7 +172,7 @@
 #define HID_REPORT_INTERVAL_MS 4 // 4 ms interval for sending HID reports (250 Hz) current Core 1 roundtrip time is ~2ms
 #else
 #ifdef BOARD_RP2040
-#define HID_REPORT_INTERVAL_MS 7 // 7 ms HID interval (~142.9 Hz); RP2040 filter runtime (level-1 light telemetry): avg ~6.61 ms, observed max ~7.90 ms
+#define HID_REPORT_INTERVAL_MS 7 // 7 ms HID interval (~142.9 Hz); RP2040 filter runtime (level-1 light telemetry): avg ~6.61 ms, max ~7.90 ms at 133 MHz; avg ~4.75 ms, max ~6.3 ms at 200 MHz
 #else
 #define HID_REPORT_INTERVAL_MS 20 // Default to 20 ms interval for sending HID reports (50 Hz) for unknown boards
 #endif
@@ -186,6 +190,9 @@
 #endif
 
 #define PERFORMANCE_PRINT_INTERVAL_MS 3000
+
+// Reported to the configurator page
+#define CONFIGURATOR_FIRMWARE_VERSION "ekf-cfg-1"
 
 // Central debug switches (0 = off, 1 = on)
 #define DEBUG_MAIN_SERIAL 0

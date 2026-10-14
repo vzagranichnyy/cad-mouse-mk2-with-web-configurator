@@ -78,13 +78,15 @@ namespace CoreMailbox {
         return true;
     }
 
-    void publishFiltered(const float (&state)[12], float dt)
+    void publishFiltered(const float (&state)[12], const float (&pose)[6], const float (&raw_pose)[6], float dt)
     {
         const uint32_t sequence = g_filtered_sequence;
         g_filtered_sequence = sequence + 1u;
         __dmb();
 
         copyToVolatile(g_filtered_data.state, state);
+        copyToVolatile(g_filtered_data.pose, pose);
+        copyToVolatile(g_filtered_data.raw_pose, raw_pose);
         g_filtered_data.dt = dt;
 
         __dmb();
@@ -104,6 +106,8 @@ namespace CoreMailbox {
 
             __dmb();
             copyFromVolatile(data.state, g_filtered_data.state);
+            copyFromVolatile(data.pose, g_filtered_data.pose);
+            copyFromVolatile(data.raw_pose, g_filtered_data.raw_pose);
             data.dt = g_filtered_data.dt;
             __dmb();
 

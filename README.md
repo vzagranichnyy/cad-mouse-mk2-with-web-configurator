@@ -1,4 +1,27 @@
-# CAD Mouse MK2
+# CAD Mouse MK2 with web configurator
+
+This repository builds on [sb-ocr/cad-mouse-mk2](https://github.com/sb-ocr/cad-mouse-mk2)
+(hardware and original firmware) and the EKF firmware by
+[maximweb](https://github.com/maximweb/cad-mouse-mk2) (branch `ekf-firmware`). It adds:
+
+- **Web configurator** (`tools/configurator.html`): live view of all six axes,
+  settings that apply immediately (deadzones, isolation, sensitivity per
+  direction, filter, sleep), calibration, and saving to the mouse. It runs in
+  Chrome or Edge over Web Serial, nothing to install.
+- **Configurator on the mouse**: hold one button while plugging the mouse in and
+  it also shows up as a read-only USB drive with the configurator page.
+- **Guided axis decoupling**: a 12-step wizard measures how the axes leak into
+  each other and removes it with a 6x6 matrix, so the isolation can be relaxed.
+- **Fixes and tuning**: no lost button releases, faster wake from sleep, correct
+  I2C clock after sleep on RP2040, calibrations stuck at their fit bounds are
+  rejected, NaN guards kept under `-Ofast`, RP2040 overclocked to 200 MHz (filter
+  ~4.7 ms instead of ~6.6 ms), optional auto zero and cross-axis deadzone.
+
+The USB VID/PID are set to the 3Dconnexion SpaceMouse Compact (`256F:C635`), so
+3DxWare picks the mouse up. See the [firmware documentation](./firmware/README.md)
+for details.
+
+## Original project
 
 Watch the build video ↓
 

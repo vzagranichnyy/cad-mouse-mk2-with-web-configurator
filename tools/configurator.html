@@ -1,0 +1,964 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Настройка CAD Mouse</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --text: #1a1e24;
+    --muted: #5d6877;
+    --line: #e2e6eb;
+    --track: #edf0f4;
+    --deadzone: #94a3b833;
+    --accent: #2563eb;
+    --accent-soft: #2563eb40;
+    --ok: #15803d;
+    --warn: #b45309;
+    --err: #dc2626;
+    --chip: #eef2f7;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1115;
+      --card: #161a20;
+      --text: #e5e8ed;
+      --muted: #94a0b0;
+      --line: #262c35;
+      --track: #1e242c;
+      --deadzone: #94a3b826;
+      --accent: #60a5fa;
+      --accent-soft: #60a5fa45;
+      --ok: #4ade80;
+      --warn: #fbbf24;
+      --err: #f87171;
+      --chip: #1f252d;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--line);
+    background: var(--card);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  h1 { font-size: 17px; margin: 0 auto 0 0; font-weight: 650; }
+  h2 { font-size: 14px; margin: 0 0 12px; font-weight: 650; }
+  h3 { font-size: 13px; margin: 18px 0 8px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  h3:first-of-type { margin-top: 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: var(--chip);
+    color: var(--muted);
+    font-size: 12.5px;
+    white-space: nowrap;
+  }
+  .chip.ok { color: var(--ok); }
+  .chip.warn { color: var(--warn); }
+  .chip.err { color: var(--err); }
+  button {
+    font: inherit;
+    border: 1px solid var(--line);
+    background: var(--card);
+    color: var(--text);
+    padding: 7px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  main {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    gap: 16px;
+    padding: 16px 20px 28px;
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+  @media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); padding: 12px 16px 24px; } }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px;
+    min-width: 0;
+  }
+  .stack { display: grid; gap: 16px; align-content: start; min-width: 0; }
+  .hint { color: var(--muted); font-size: 12.5px; margin: 2px 0 0; }
+  .banner {
+    grid-column: 1 / -1;
+    padding: 12px 16px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--card);
+  }
+  .banner.err { border-color: var(--err); color: var(--err); }
+  .hidden { display: none !important; }
+
+  /* Live view */
+  .axis {
+    display: grid;
+    grid-template-columns: 112px minmax(0, 1fr) 92px;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+  }
+  .axis-name { font-weight: 600; }
+  .axis-name span { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
+  .bar {
+    position: relative;
+    height: 26px;
+    background: var(--track);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .bar .dz {
+    position: absolute; top: 0; bottom: 0;
+    background: var(--deadzone);
+  }
+  .bar .center {
+    position: absolute; top: 0; bottom: 0; left: 50%;
+    width: 1px; background: var(--muted); opacity: .5;
+  }
+  .bar .in {
+    position: absolute; top: 4px; bottom: 4px;
+    background: var(--accent-soft);
+    border-radius: 3px;
+  }
+  .bar .out {
+    position: absolute; top: 10px; bottom: 10px;
+    background: var(--accent);
+    border-radius: 3px;
+  }
+  .axis-values { font-variant-numeric: tabular-nums; font-size: 12.5px; text-align: right; color: var(--muted); }
+  .axis-values b { color: var(--text); font-weight: 600; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; color: var(--muted); font-size: 12.5px; margin-top: 10px; }
+  .legend i { display: inline-block; width: 18px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+  .buttons-row { display: flex; gap: 10px; margin-top: 12px; align-items: center; color: var(--muted); font-size: 12.5px; }
+  .led { width: 12px; height: 12px; border-radius: 50%; background: var(--track); border: 1px solid var(--line); display: inline-block; vertical-align: middle; margin-right: 4px; }
+  .led.on { background: var(--accent); border-color: var(--accent); }
+
+  /* Settings */
+  .field { padding: 8px 0; border-top: 1px solid var(--line); }
+  .field:first-child { border-top: 0; }
+  .field-head { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+  .field-head label { font-weight: 500; }
+  .field-row { display: grid; grid-template-columns: minmax(0, 1fr) 84px; gap: 10px; align-items: center; margin-top: 4px; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  input[type=number] {
+    width: 100%;
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+    padding: 4px 6px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .sens {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px 14px;
+    align-items: end;
+  }
+  .sens .head { color: var(--muted); font-size: 12px; }
+  .sens .ax { font-weight: 600; padding-bottom: 6px; }
+  .sens .cell span { display: block; color: var(--muted); font-size: 12px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .status-line { margin-top: 10px; min-height: 20px; }
+  .status-line.ok { color: var(--ok); }
+  .status-line.warn { color: var(--warn); }
+  .status-line.err { color: var(--err); }
+  dl.info { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; margin: 12px 0 0; font-size: 13px; }
+  dl.info dt { color: var(--muted); }
+  dl.info dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .log {
+    font: 12px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 10px;
+    height: 180px;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .log .err { color: var(--err); }
+  .log .muted { color: var(--muted); }
+  details summary { cursor: pointer; font-weight: 650; }
+
+  /* Decoupling wizard */
+  .wizard {
+    margin-top: 12px;
+    padding: 14px;
+    border: 1px solid var(--accent);
+    border-radius: 10px;
+  }
+  .wizard-step { color: var(--muted); font-size: 12.5px; }
+  .wizard-text { font-size: 18px; font-weight: 650; margin: 4px 0 10px; }
+  .progress { height: 8px; background: var(--track); border-radius: 4px; overflow: hidden; margin-bottom: 12px; }
+  .progress div { height: 100%; width: 0; background: var(--accent); transition: width .1s linear; }
+  table.result { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; font-variant-numeric: tabular-nums; }
+  table.result th { text-align: left; color: var(--muted); font-weight: 500; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+  table.result td { padding: 4px 6px; border-bottom: 1px solid var(--line); }
+  table.result td.num, table.result th.num { text-align: right; }
+  .better { color: var(--ok); }
+  .worse { color: var(--err); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Настройка CAD Mouse MK2</h1>
+  <div class="chips">
+    <span class="chip" id="chipConn">Не подключено</span>
+    <span class="chip hidden" id="chipState"></span>
+    <span class="chip hidden" id="chipRate"></span>
+    <span class="chip hidden" id="chipCal"></span>
+  </div>
+  <button class="primary" id="btnConnect">Подключить мышь</button>
+</header>
+
+<main>
+  <div class="banner err hidden" id="noSerial">
+    Этот браузер не умеет работать с USB-портом. Откройте страницу в Google Chrome или Microsoft Edge.
+  </div>
+  <div class="banner hidden" id="oldFirmware">
+    Мышь не отвечает на команды настройки. Похоже, в ней прошивка без конфигуратора: прошейте версию ekf-cfg-1 или новее.
+  </div>
+
+  <div class="stack">
+    <section class="card">
+      <h2>Живая картина</h2>
+      <div id="axes"></div>
+      <div class="legend">
+        <span><i style="background:var(--accent-soft)"></i>Вход: положение ручки</span>
+        <span><i style="background:var(--accent)"></i>Выход: что уходит в компьютер</span>
+        <span><i style="background:var(--deadzone)"></i>Мёртвая зона</span>
+      </div>
+      <div class="buttons-row">
+        Кнопки:
+        <span><span class="led" id="btnLeft"></span>левая</span>
+        <span><span class="led" id="btnRight"></span>правая</span>
+      </div>
+      <p class="hint">Шкала: край полосы — 100% хода, заданного в разделе «Чувствительность». Если при движении по одной оси на другой появляется выход, оси перемешиваются.</p>
+    </section>
+
+    <section class="card">
+      <h2>Калибровка</h2>
+      <p class="hint" style="margin-top:0">Уберите руку с ручки и нажмите «Калибровать». Мышь соберёт данные за 2 секунды и сохранит результат.</p>
+      <div class="actions" style="margin-top:10px">
+        <button id="btnCalibrate" disabled>Калибровать</button>
+      </div>
+      <div class="status-line" id="calStatus"></div>
+      <dl class="info" id="info"></dl>
+    </section>
+
+    <section class="card">
+      <h2>Развязка осей</h2>
+      <p class="hint" style="margin-top:0">Вы по очереди сдвигаете ручку в 12 направлениях, а страница измеряет, как при этом откликаются остальные оси, и вычитает эти связи. После этого «Силу изоляции» можно уменьшить до 1,5–2, и комбинированные движения станут честнее.</p>
+      <div class="actions" style="margin-top:10px">
+        <button class="primary" id="btnDcStart" disabled>Начать</button>
+        <button id="btnDcToggle" disabled>Выключить</button>
+        <button id="btnDcSave" disabled>Сохранить в мышь</button>
+        <button id="btnDcReset" disabled>Сбросить</button>
+      </div>
+      <div class="status-line" id="dcStatus"></div>
+      <div class="wizard hidden" id="dcWizard">
+        <div class="wizard-step" id="dcStep"></div>
+        <div class="wizard-text" id="dcText"></div>
+        <div class="progress"><div id="dcProgress"></div></div>
+        <div class="actions">
+          <button id="btnDcSkip">Пропустить шаг</button>
+          <button id="btnDcCancel">Отмена</button>
+        </div>
+      </div>
+      <div id="dcResult"></div>
+    </section>
+
+    <section class="card">
+      <details>
+        <summary>Журнал обмена</summary>
+        <div class="log" id="log" style="margin-top:10px"></div>
+      </details>
+    </section>
+  </div>
+
+  <div class="stack">
+    <section class="card">
+      <h2>Настройки</h2>
+      <div class="actions">
+        <button class="primary" id="btnSave" disabled>Сохранить в мышь</button>
+        <button id="btnReload" disabled>Отменить несохранённое</button>
+        <button id="btnDefaults" disabled>По умолчанию</button>
+      </div>
+      <div class="status-line" id="saveStatus"></div>
+      <p class="hint">Изменения действуют сразу. Чтобы они сохранились после отключения мыши, нажмите «Сохранить в мышь».</p>
+      <div id="groups"></div>
+    </section>
+
+    <section class="card">
+      <h2>Чувствительность</h2>
+      <p class="hint" style="margin-top:0">Ход ручки, при котором мышь выдаёт полную скорость. Меньше — чувствительнее. Можно задать разные значения для каждого направления.</p>
+      <div class="sens" id="sens" style="margin-top:12px"></div>
+    </section>
+
+    <section class="card">
+      <h2>Страница в мыши</h2>
+      <p class="hint" style="margin-top:0">Эта страница записана в саму мышь. Подключите мышь, удерживая одну из кнопок: появится диск CADMOUSE с файлом configurator.html. Откройте его в Chrome или Edge. Чтобы диск исчез, переподключите мышь без нажатой кнопки.</p>
+      <div class="actions" style="margin-top:10px">
+        <button id="btnDrive" disabled>Показать диск сейчас</button>
+      </div>
+      <p class="hint">Мышь перезагрузится и появится уже с диском. Обе кнопки при подключении не зажимайте: долгое нажатие обеих запускает калибровку.</p>
+    </section>
+  </div>
+</main>
+
+<script>
+"use strict";
+
+// Keys and ranges must match firmware/lib/settings/settings.cpp
+const pct = v => Math.round(v * 100) + "%";
+const GROUPS = [
+  { title: "Мёртвые зоны", fields: [
+    { key: "dz_t", label: "Сдвиг (X, Y, Z)", min: 0, max: 0.5, step: 0.005, fmt: pct,
+      hint: "Насколько сдвинуть ручку, прежде чем модель начнёт двигаться." },
+    { key: "dz_r", label: "Наклон и поворот", min: 0, max: 0.5, step: 0.005, fmt: pct },
+    { key: "cross", label: "Между осями", min: 0, max: 0.9, step: 0.01, fmt: pct,
+      hint: "Оси слабее этой доли от главной не передаются. 0 — выключено." },
+  ]},
+  { title: "Изоляция осей", fields: [
+    { key: "iso", label: "Сила изоляции", min: 0.5, max: 5, step: 0.1, fmt: v => v.toFixed(1),
+      hint: "1 — оси не разделяются, 3 — по умолчанию. Больше — чище одна ось, сложнее комбинированные движения." },
+  ]},
+  { title: "Автоподстройка нуля", fields: [
+    { key: "az", label: "Время подстройки", min: 0, max: 10, step: 0.1, fmt: v => v === 0 ? "выкл." : v.toFixed(1) + " с",
+      hint: "Пока ручка в покое, ноль плавно подстраивается. Меньше — быстрее. 0 — выключено." },
+  ]},
+  { title: "Фильтр", fields: [
+    { key: "ekf_q", label: "Отзывчивость", min: 0.05, max: 20, step: 0.05, fmt: v => v.toFixed(2),
+      hint: "Больше — быстрее реакция, но заметнее дрожание." },
+    { key: "ekf_r", label: "Сглаживание", min: 0.2, max: 50, step: 0.1, fmt: v => v.toFixed(1),
+      hint: "Больше — плавнее, но с небольшой задержкой." },
+  ]},
+  { title: "Сон", fields: [
+    { key: "sleep", label: "Засыпать через", min: 0, max: 600, step: 5, fmt: v => v === 0 ? "никогда" : Math.round(v) + " с",
+      hint: "Подсветка гаснет после бездействия. 0 — не засыпать. Пока страница подключена, мышь не спит." },
+  ]},
+];
+const SENS = [
+  { axis: "X",  plus: "вправо",         minus: "влево",          kp: "x_max",  km: "x_min",  unit: "мм", min: 0.2, max: 5,  step: 0.05 },
+  { axis: "Y",  plus: "вперёд",         minus: "назад",          kp: "y_max",  km: "y_min",  unit: "мм", min: 0.2, max: 5,  step: 0.05 },
+  { axis: "Z",  plus: "вверх",          minus: "вниз",           kp: "z_max",  km: "z_min",  unit: "мм", min: 0.2, max: 5,  step: 0.05 },
+  { axis: "RX", plus: "наклон назад",   minus: "наклон вперёд",  kp: "rx_max", km: "rx_min", unit: "°",  min: 0.5, max: 20, step: 0.1 },
+  { axis: "RY", plus: "наклон вправо",  minus: "наклон влево",   kp: "ry_max", km: "ry_min", unit: "°",  min: 0.5, max: 20, step: 0.1 },
+  { axis: "RZ", plus: "поворот влево",  minus: "поворот вправо", kp: "rz_max", km: "rz_min", unit: "°",  min: 0.5, max: 20, step: 0.1 },
+];
+const AXES = [
+  { name: "X",  desc: "вправо / влево" },
+  { name: "Y",  desc: "вперёд / назад" },
+  { name: "Z",  desc: "вверх / вниз" },
+  { name: "RX", desc: "наклон вперёд-назад" },
+  { name: "RY", desc: "наклон вбок" },
+  { name: "RZ", desc: "поворот" },
+];
+// StateMachine::State order in firmware/lib/state_machine/state_machine.h
+const STATES = [
+  ["Запуск", ""], ["Проверка датчиков", ""], ["Ошибка датчиков", "err"], ["Переподключение датчиков", "warn"],
+  ["Загрузка калибровки", ""], ["Калибровка", "warn"], ["Расчёт калибровки", "warn"],
+  ["Работает", "ok"], ["Работает без калибровки", "warn"], ["Сон", ""],
+];
+const RUNNING = 7, RUNNING_WITHOUT_CALIBRATION = 8, CALIBRATE_COLLECT = 5, CALIBRATE_COMPUTE = 6;
+// Calibration::LoadState
+const CAL_STATES = [
+  ["Калибровка: нет", "warn"], ["Калибровка из памяти", "ok"], ["Калибровка не удалась", "err"],
+  ["Калибровка сохранена", "ok"], ["Калибровка не сохранилась", "warn"],
+];
+
+const $ = id => document.getElementById(id);
+const controls = {};        // key -> { range, number, display, spec }
+let settings = null;        // last values reported by the mouse
+let saved = null;           // values known to be stored in the mouse
+let port = null, reader = null, writer = null, readDone = null;
+let gotSettings = false;
+const pending = new Map();  // key -> timer for debounced "set"
+let editingKey = null;
+let calibration = null;     // { phase: "requested" | "running" }
+
+// ---------- UI construction ----------
+
+function buildAxes() {
+  const root = $("axes");
+  AXES.forEach((axis, i) => {
+    const row = document.createElement("div");
+    row.className = "axis";
+    row.innerHTML = `
+      <div class="axis-name">${axis.name}<span>${axis.desc}</span></div>
+      <div class="bar"><div class="dz"></div><div class="center"></div><div class="in"></div><div class="out"></div></div>
+      <div class="axis-values">вход <b class="vin">0%</b><br>выход <b class="vout">0%</b></div>`;
+    root.appendChild(row);
+    AXES[i].el = {
+      dz: row.querySelector(".dz"), in: row.querySelector(".in"), out: row.querySelector(".out"),
+      vin: row.querySelector(".vin"), vout: row.querySelector(".vout"),
+    };
+  });
+}
+
+function makeControl(spec, label, hint) {
+  const wrap = document.createElement("div");
+  wrap.className = "field";
+  const id = "f_" + spec.key;
+  wrap.innerHTML = `
+    <div class="field-head"><label for="${id}">${label}</label><span class="display"></span></div>
+    <div class="field-row">
+      <input type="range" id="${id}" min="${spec.min}" max="${spec.max}" step="${spec.step}" disabled>
+      <input type="number" min="${spec.min}" max="${spec.max}" step="${spec.step}" disabled aria-label="${label}">
+    </div>
+    ${hint ? `<p class="hint">${hint}</p>` : ""}`;
+  const range = wrap.querySelector("input[type=range]");
+  const number = wrap.querySelector("input[type=number]");
+  const display = wrap.querySelector(".display");
+  controls[spec.key] = { range, number, display, spec };
+
+  const onEdit = (value, immediate) => {
+    if (!Number.isFinite(value)) return;
+    value = Math.min(spec.max, Math.max(spec.min, value));
+    showValue(spec.key, value, true);
+    queueSet(spec.key, value, immediate);
+  };
+  range.addEventListener("input", () => { editingKey = spec.key; onEdit(parseFloat(range.value), false); });
+  range.addEventListener("change", () => { editingKey = null; onEdit(parseFloat(range.value), true); });
+  number.addEventListener("focus", () => { editingKey = spec.key; });
+  number.addEventListener("blur", () => { editingKey = null; });
+  number.addEventListener("change", () => onEdit(parseFloat(number.value), true));
+  return wrap;
+}
+
+function buildSettings() {
+  const root = $("groups");
+  for (const group of GROUPS) {
+    const h = document.createElement("h3");
+    h.textContent = group.title;
+    root.appendChild(h);
+    const box = document.createElement("div");
+    for (const f of group.fields) box.appendChild(makeControl(f, f.label, f.hint));
+    root.appendChild(box);
+  }
+
+  const sens = $("sens");
+  sens.innerHTML = `<div class="head"></div><div class="head">в плюс</div><div class="head">в минус</div>`;
+  for (const s of SENS) {
+    const ax = document.createElement("div");
+    ax.className = "ax";
+    ax.textContent = s.axis;
+    sens.appendChild(ax);
+    for (const [key, dir] of [[s.kp, s.plus], [s.km, s.minus]]) {
+      const spec = { key, min: s.min, max: s.max, step: s.step, fmt: v => v.toFixed(s.unit === "мм" ? 2 : 1) + " " + s.unit };
+      const cell = makeControl(spec, dir, "");
+      cell.className = "cell";
+      sens.appendChild(cell);
+    }
+  }
+}
+
+function formatValue(spec, v) {
+  return spec.fmt ? spec.fmt(v) : String(v);
+}
+
+function showValue(key, value, fromUser) {
+  const c = controls[key];
+  if (!c) return;
+  c.display.textContent = formatValue(c.spec, value);
+  if (!fromUser || document.activeElement !== c.range) c.range.value = value;
+  if (document.activeElement !== c.number) c.number.value = +value.toFixed(4);
+}
+
+function setEnabled(enabled) {
+  for (const c of Object.values(controls)) { c.range.disabled = !enabled; c.number.disabled = !enabled; }
+  for (const id of ["btnSave", "btnReload", "btnDefaults", "btnCalibrate", "btnDcStart", "btnDcToggle", "btnDcSave", "btnDcReset", "btnDrive"]) $(id).disabled = !enabled;
+}
+
+// ---------- Serial ----------
+
+function log(text, cls) {
+  const box = $("log");
+  const line = document.createElement("div");
+  if (cls) line.className = cls;
+  line.textContent = new Date().toLocaleTimeString() + "  " + text;
+  box.appendChild(line);
+  while (box.childNodes.length > 300) box.removeChild(box.firstChild);
+  box.scrollTop = box.scrollHeight;
+}
+
+async function send(command) {
+  if (!writer) return;
+  log("→ " + command, "muted");
+  await writer.write(new TextEncoder().encode(command + "\n"));
+}
+
+function queueSet(key, value, immediate) {
+  clearTimeout(pending.get(key));
+  const run = () => { pending.delete(key); send(`set ${key} ${+value.toFixed(4)}`); };
+  if (immediate) run(); else pending.set(key, setTimeout(run, 120));
+}
+
+async function connect(chosenPort) {
+  try {
+    port = chosenPort || await navigator.serial.requestPort({ filters: [{ usbVendorId: 0x256F }] });
+    await port.open({ baudRate: 115200 });
+    try { await port.setSignals({ dataTerminalReady: true, requestToSend: true }); } catch (e) { /* not all drivers support it */ }
+    writer = port.writable.getWriter();
+    readDone = readLoop();
+    setConnected(true);
+    gotSettings = false;
+    await send("stream 1");
+    await send("info");
+    await send("get");
+    await send("dc_get");
+    setTimeout(() => { if (port && !gotSettings) $("oldFirmware").classList.remove("hidden"); }, 2500);
+  } catch (e) {
+    if (e.name !== "NotFoundError") log("Не удалось подключиться: " + e.message, "err");
+    await cleanup();
+  }
+}
+
+async function readLoop() {
+  const decoder = new TextDecoder();
+  reader = port.readable.getReader();
+  let buffer = "";
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let index;
+      while ((index = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, index).trim();
+        buffer = buffer.slice(index + 1);
+        if (line) handleLine(line);
+      }
+    }
+  } catch (e) {
+    log("Связь прервалась: " + e.message, "err");
+  } finally {
+    reader.releaseLock();
+    reader = null;
+  }
+}
+
+async function cleanup() {
+  try { if (reader) await reader.cancel(); } catch (e) { /* already closed */ }
+  try { if (readDone) await readDone; } catch (e) { /* ignore */ }
+  try { if (writer) writer.releaseLock(); } catch (e) { /* ignore */ }
+  try { if (port) await port.close(); } catch (e) { /* ignore */ }
+  port = reader = writer = readDone = null;
+  setConnected(false);
+}
+
+async function disconnect() {
+  try { await send("stream 0"); } catch (e) { /* port may be gone */ }
+  await cleanup();
+}
+
+function setConnected(connected) {
+  $("chipConn").textContent = connected ? "Подключено" : "Не подключено";
+  $("chipConn").className = "chip " + (connected ? "ok" : "");
+  $("btnConnect").textContent = connected ? "Отключить" : "Подключить мышь";
+  $("btnConnect").classList.toggle("primary", !connected);
+  for (const id of ["chipState", "chipRate", "chipCal"]) $(id).classList.toggle("hidden", !connected);
+  if (!connected) {
+    setEnabled(false);
+    $("oldFirmware").classList.add("hidden");
+    if (wizard) { wizard = null; $("dcWizard").classList.add("hidden"); status("dcStatus", "Измерение прервано: мышь отключилась", "err"); }
+    dcSaved = null;
+  }
+}
+
+// ---------- Messages from the mouse ----------
+
+function handleLine(line) {
+  let msg;
+  try { msg = JSON.parse(line); } catch (e) { log(line); return; }
+  switch (msg.t) {
+    case "tel": onTelemetry(msg); break;
+    case "settings": onSettings(msg.v); break;
+    case "info": onInfo(msg); log("← сведения о прошивке получены", "muted"); break;
+    case "dc": onDecoupling(msg); break;
+    case "ok":
+      log("← готово: " + msg.cmd, "muted");
+      if (msg.cmd === "save") { saved = { ...settings }; updateDirty(); status("saveStatus", "Сохранено в мышь", "ok"); }
+      if (msg.cmd === "dc_save" && dcState) { dcSaved = JSON.stringify(dcState); dcNotice = null; onDecoupling(dcState); }
+      if (msg.cmd === "drive") log("Мышь перезагружается с диском CADMOUSE", "muted");
+      break;
+    case "err":
+      log("← ошибка: " + msg.msg, "err");
+      if (msg.msg === "save failed") status("saveStatus", "Не удалось сохранить", "err");
+      if (msg.msg === "no saved settings") status("saveStatus", "В мыши нет сохранённых настроек", "warn");
+      if (msg.msg === "dc_save failed") status("dcStatus", "Не удалось сохранить развязку", "err");
+      break;
+    default: log(line);
+  }
+}
+
+function onSettings(values) {
+  const first = !gotSettings;
+  gotSettings = true;
+  $("oldFirmware").classList.add("hidden");
+  settings = values;
+  if (first || saved === null) saved = { ...values };
+  for (const [key, value] of Object.entries(values)) {
+    if (key !== editingKey && !pending.has(key)) showValue(key, value, false);
+  }
+  setEnabled(true);
+  updateDirty();
+}
+
+function updateDirty() {
+  if (!settings || !saved) return;
+  const dirty = Object.keys(settings).some(k => Math.abs(settings[k] - saved[k]) > 1e-4);
+  $("btnSave").textContent = dirty ? "Сохранить в мышь •" : "Сохранить в мышь";
+  if (dirty) status("saveStatus", "Есть несохранённые изменения", "warn");
+  else if ($("saveStatus").classList.contains("warn")) status("saveStatus", "", "");
+}
+
+function status(id, text, cls) {
+  $(id).textContent = text;
+  $(id).className = "status-line " + (cls || "");
+}
+
+function onInfo(msg) {
+  const r = v => v.toFixed(3);
+  const o = msg.offsets || [];
+  $("info").innerHTML = `
+    <dt>Прошивка</dt><dd>${msg.fw}, ${msg.cpu_mhz} МГц${msg.drive ? ", диск CADMOUSE показан" : ""}</dd>
+    <dt>Магниты</dt><dd>${(msg.moments || []).map(v => v.toFixed(4)).join(" · ")} А·м²</dd>
+    <dt>Смещение</dt><dd>X ${r(o[0])} · Y ${r(o[1])} · Z ${r(o[2])} мм</dd>
+    <dt>Поворот</dt><dd>RX ${r(o[3])} · RY ${r(o[4])} · RZ ${r(o[5])}°</dd>`;
+}
+
+function onTelemetry(t) {
+  const state = STATES[t.st] || ["Состояние " + t.st, ""];
+  $("chipState").textContent = state[0];
+  $("chipState").className = "chip " + state[1];
+  $("chipRate").textContent = "Фильтр " + t.hz + " Гц";
+  const cal = CAL_STATES[t.cal] || ["Калибровка " + t.cal, ""];
+  $("chipCal").textContent = cal[0];
+  $("chipCal").className = "chip " + cal[1];
+
+  $("btnLeft").classList.toggle("on", (t.b & 1) !== 0);
+  $("btnRight").classList.toggle("on", (t.b & 2) !== 0);
+
+  AXES.forEach((axis, i) => {
+    const vin = (t.p[i] || 0) / 1000, vout = (t.o[i] || 0) / 1000;
+    placeBar(axis.el.in, vin);
+    placeBar(axis.el.out, vout);
+    axis.el.vin.textContent = Math.round(vin * 100) + "%";
+    axis.el.vout.textContent = Math.round(vout * 100) + "%";
+    const dz = settings ? (i < 3 ? settings.dz_t : settings.dz_r) : 0;
+    axis.el.dz.style.left = (50 - dz * 50) + "%";
+    axis.el.dz.style.width = (dz * 100) + "%";
+  });
+
+  trackCalibration(t);
+  trackWizard(t);
+}
+
+function placeBar(el, value) {
+  const v = Math.max(-1, Math.min(1, value));
+  el.style.left = (v >= 0 ? 50 : 50 + v * 50) + "%";
+  el.style.width = Math.abs(v) * 50 + "%";
+}
+
+// ---------- Calibration ----------
+
+function trackCalibration(t) {
+  if (!calibration) return;
+  if (t.st === CALIBRATE_COLLECT || t.st === CALIBRATE_COMPUTE) {
+    calibration.phase = "running";
+    status("calStatus", "Идёт калибровка, не трогайте ручку…", "warn");
+    return;
+  }
+  if (calibration.phase === "running" && (t.st === RUNNING || t.st === RUNNING_WITHOUT_CALIBRATION)) {
+    calibration = null;
+    if (t.cal === 3) status("calStatus", "Калибровка прошла и сохранена.", "ok");
+    else if (t.cal === 4) status("calStatus", "Калибровка прошла, но не сохранилась в память.", "warn");
+    else if (t.cal === 2) status("calStatus", "Калибровка не прошла, мышь работает без калибровки. Подробности в журнале.", "err");
+    else status("calStatus", "Калибровка не прошла, оставлена прежняя. Подробности в журнале.", "err");
+    send("info");
+  }
+}
+
+// ---------- Axis decoupling ----------
+
+// Physical directions; signs follow the firmware: x right, y forward, z up,
+// rx tilts the top toward you, ry tilts it right, rz turns counter-clockwise.
+const DC_STEPS = [
+  { axis: 0, text: "Сдвиньте ручку вправо",                  short: "сдвиг вправо" },
+  { axis: 0, text: "Сдвиньте ручку влево",                   short: "сдвиг влево" },
+  { axis: 1, text: "Сдвиньте ручку от себя",                 short: "сдвиг от себя" },
+  { axis: 1, text: "Сдвиньте ручку на себя",                 short: "сдвиг на себя" },
+  { axis: 2, text: "Потяните ручку вверх",                   short: "вверх" },
+  { axis: 2, text: "Надавите на ручку сверху",               short: "вниз" },
+  { axis: 3, text: "Наклоните ручку на себя",                short: "наклон на себя" },
+  { axis: 3, text: "Наклоните ручку от себя",                short: "наклон от себя" },
+  { axis: 4, text: "Наклоните ручку вправо",                 short: "наклон вправо" },
+  { axis: 4, text: "Наклоните ручку влево",                  short: "наклон влево" },
+  { axis: 5, text: "Поверните ручку против часовой стрелки", short: "поворот против часовой" },
+  { axis: 5, text: "Поверните ручку по часовой стрелке",     short: "поворот по часовой" },
+];
+const DC_THRESHOLD = 0.35;     // intended axis must reach 35% of its range
+const DC_SAMPLES = 45;         // ~1.5 s of telemetry per direction
+const DC_REST = 0.12;          // all axes below 12% counts as released
+let dcState = null;            // last {on, m} reported by the mouse
+let dcSaved = null;            // matrix + on known to be stored in the mouse
+let wizard = null;             // { step, phase, steps, previous, restFrames }
+let dcNotice = null;           // wizard result message, kept until the next decoupling action
+
+function onDecoupling(msg) {
+  dcState = { on: msg.on, m: msg.m };
+  if (dcSaved === null) dcSaved = JSON.stringify(dcState);
+  $("btnDcToggle").textContent = dcState.on ? "Выключить" : "Включить";
+  if (wizard) return;
+  if (dcNotice) { status("dcStatus", dcNotice.text, dcNotice.cls); return; }
+  const identity = msg.m.every((v, i) => Math.abs(v - (i % 7 === 0 ? 1 : 0)) < 1e-6);
+  const saved = JSON.stringify(dcState) === dcSaved;
+  const text = identity ? "Развязка не настроена" : (dcState.on ? "Развязка включена" : "Развязка выключена");
+  status("dcStatus", text + (saved ? "" : " · не сохранено"), saved ? (dcState.on ? "ok" : "") : "warn");
+}
+
+function startWizard() {
+  dcNotice = null;
+  wizard = { step: 0, phase: "wait", steps: DC_STEPS.map(s => ({ axis: s.axis, samples: [] })),
+             previous: dcState ? { ...dcState } : null, restFrames: 0 };
+  $("dcResult").innerHTML = "";
+  $("dcWizard").classList.remove("hidden");
+  status("dcStatus", "Развязка временно выключена на время измерений", "warn");
+  send("dc_on 0");
+  send("stream 2");
+  showWizardStep();
+}
+
+function showWizardStep() {
+  const s = DC_STEPS[wizard.step];
+  $("dcStep").textContent = `Шаг ${wizard.step + 1} из ${DC_STEPS.length}`;
+  if (wizard.phase === "release") {
+    $("dcText").textContent = "Отпустите ручку";
+  } else {
+    $("dcText").textContent = s.text + " примерно наполовину и держите";
+  }
+  const collected = wizard.steps[wizard.step].samples.length;
+  $("dcProgress").style.width = Math.min(100, collected / DC_SAMPLES * 100) + "%";
+}
+
+function trackWizard(t) {
+  if (!wizard || !t.r) return;
+  const step = wizard.steps[wizard.step];
+  const p = t.p.map(v => v / 1000);
+  if (wizard.phase === "wait" || wizard.phase === "collect") {
+    if (Math.abs(p[step.axis]) >= DC_THRESHOLD) {
+      wizard.phase = "collect";
+      step.samples.push(t.r.map((v, i) => v / 10000)); // mm and rad
+      if (step.samples.length >= DC_SAMPLES) { wizard.phase = "release"; wizard.restFrames = 0; }
+    }
+  } else if (wizard.phase === "release") {
+    wizard.restFrames = p.every(v => Math.abs(v) < DC_REST) ? wizard.restFrames + 1 : 0;
+    if (wizard.restFrames >= 10) nextWizardStep();
+  }
+  if (wizard) showWizardStep();
+}
+
+function nextWizardStep() {
+  wizard.step += 1;
+  wizard.phase = "wait";
+  if (wizard.step >= DC_STEPS.length) finishWizard();
+}
+
+function restoreDecoupling(previous) {
+  if (!previous) return;
+  send("dc_set " + previous.m.map(v => +v.toFixed(6)).join(" "));
+  send("dc_on " + previous.on);
+}
+
+function cancelWizard() {
+  const previous = wizard && wizard.previous;
+  wizard = null;
+  $("dcWizard").classList.add("hidden");
+  send("stream 1");
+  restoreDecoupling(previous);
+}
+
+function axisScales() {
+  // Typical full-scale travel per axis, so translation (mm) and rotation (rad) weigh alike in the fit
+  const s = settings || {};
+  const avg = (a, b, d) => ((s[a] ?? d) + (s[b] ?? d)) / 2;
+  const deg = Math.PI / 180;
+  return [
+    avg("x_max", "x_min", 1.7), avg("y_max", "y_min", 1.7), avg("z_max", "z_min", 1.25),
+    avg("rx_max", "rx_min", 6.5) * deg, avg("ry_max", "ry_min", 6.5) * deg, avg("rz_max", "rz_min", 5.5) * deg,
+  ];
+}
+
+function invert6(a) {
+  const n = 6;
+  const m = a.map((row, i) => [...row, ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))]);
+  for (let c = 0; c < n; c++) {
+    let p = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(m[r][c]) > Math.abs(m[p][c])) p = r;
+    if (Math.abs(m[p][c]) < 1e-12) return null;
+    [m[c], m[p]] = [m[p], m[c]];
+    const d = m[c][c];
+    for (let k = 0; k < 2 * n; k++) m[c][k] /= d;
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = m[r][c];
+      if (f) for (let k = 0; k < 2 * n; k++) m[r][k] -= f * m[c][k];
+    }
+  }
+  return m.map(row => row.slice(n));
+}
+
+// Least squares with a pull toward identity:
+// minimize sum |C m - t|^2 + lambda |C - I|^2, where t keeps only the intended axis of m.
+// Solution: C = (sum t m^T + lambda I) (sum m m^T + lambda I)^-1, fitted on scaled axes.
+function fitDecoupling(steps, scale) {
+  const A = Array.from({ length: 6 }, () => Array(6).fill(0));
+  const B = Array.from({ length: 6 }, () => Array(6).fill(0));
+  for (const step of steps) {
+    for (const r of step.samples) {
+      const m = r.map((v, i) => v / scale[i]);
+      for (let i = 0; i < 6; i++) {
+        for (let j = 0; j < 6; j++) {
+          A[i][j] += m[i] * m[j];
+          if (i === step.axis) B[i][j] += m[i] * m[j];
+        }
+      }
+    }
+  }
+  const lambda = 0.02 * A.reduce((sum, row, i) => sum + row[i], 0) / 6;
+  for (let i = 0; i < 6; i++) { A[i][i] += lambda; B[i][i] += lambda; }
+  const inverse = invert6(A);
+  if (!inverse) return null;
+  const scaled = B.map(row => inverse[0].map((_, j) => row.reduce((sum, v, k) => sum + v * inverse[k][j], 0)));
+  const physical = scaled.map((row, i) => row.map((v, j) => v * scale[i] / scale[j]));
+  return { scaled, physical };
+}
+
+function crossTalk(vector, axis) {
+  const main = Math.abs(vector[axis]);
+  const off = Math.sqrt(vector.reduce((sum, v, i) => sum + (i === axis ? 0 : v * v), 0));
+  return main > 1e-9 ? off / main : NaN;
+}
+
+function finishWizard() {
+  const steps = wizard.steps;
+  const previous = wizard.previous;
+  wizard = null;
+  $("dcWizard").classList.add("hidden");
+  send("stream 1");
+
+  const used = steps.filter(s => s.samples.length > 0);
+  const axesCovered = new Set(used.map(s => s.axis)).size;
+  const scale = axisScales();
+  const fit = axesCovered >= 6 ? fitDecoupling(steps, scale) : null;
+  if (!fit) {
+    dcNotice = { text: axesCovered < 6 ? "Нужны измерения по всем 6 осям, повторите." : "Не удалось рассчитать развязку, повторите.", cls: "err" };
+    status("dcStatus", dcNotice.text, dcNotice.cls);
+    restoreDecoupling(previous);
+    return;
+  }
+
+  const diagonalOk = fit.scaled.every((row, i) => row[i] > 0.5 && row[i] < 2);
+  const offOk = fit.scaled.every((row, i) => row.every((v, j) => i === j || Math.abs(v) < 1.5));
+
+  let rows = "";
+  let before = 0, after = 0;
+  steps.forEach((step, index) => {
+    if (!step.samples.length) return;
+    const mean = [0, 1, 2, 3, 4, 5].map(i => step.samples.reduce((sum, r) => sum + r[i], 0) / step.samples.length / scale[i]);
+    const corrected = fit.scaled.map(row => row.reduce((sum, v, k) => sum + v * mean[k], 0));
+    const b = crossTalk(mean, step.axis), a = crossTalk(corrected, step.axis);
+    before += b; after += a;
+    const bp = Math.round(b * 100), ap = Math.round(a * 100);
+    rows += `<tr><td>${DC_STEPS[index].short}</td>
+      <td class="num">${bp}%</td><td class="num ${ap < bp ? "better" : ap > bp ? "worse" : ""}">${ap}%</td></tr>`;
+  });
+  $("dcResult").innerHTML = `<table class="result"><thead><tr><th>Направление</th><th class="num">Подмешивание было</th><th class="num">стало</th></tr></thead><tbody>${rows}</tbody></table>`;
+
+  if (!diagonalOk || !offOk || after >= before) {
+    dcNotice = { text: "Результат выглядит ненадёжно, развязка не применена. Повторите, двигая ручку плавно и по одной оси.", cls: "err" };
+    status("dcStatus", dcNotice.text, dcNotice.cls);
+    restoreDecoupling(previous);
+    return;
+  }
+  dcNotice = { text: "Развязка применена, но не сохранена. Попробуйте мышь и нажмите «Сохранить в мышь», если понравилось.", cls: "warn" };
+  status("dcStatus", dcNotice.text, dcNotice.cls);
+  send("dc_set " + fit.physical.flat().map(v => +v.toFixed(6)).join(" "));
+  send("dc_on 1");
+}
+
+// ---------- Wiring ----------
+
+$("btnConnect").addEventListener("click", () => port ? disconnect() : connect());
+$("btnSave").addEventListener("click", () => send("save"));
+$("btnReload").addEventListener("click", () => send("reload"));
+$("btnDefaults").addEventListener("click", () => send("defaults"));
+$("btnDcStart").addEventListener("click", startWizard);
+$("btnDcSkip").addEventListener("click", () => { if (wizard) { nextWizardStep(); if (wizard) showWizardStep(); } });
+$("btnDcCancel").addEventListener("click", cancelWizard);
+$("btnDcToggle").addEventListener("click", () => { dcNotice = null; send("dc_on " + (dcState && dcState.on ? 0 : 1)); });
+$("btnDcSave").addEventListener("click", () => { dcNotice = null; send("dc_save"); });
+$("btnDcReset").addEventListener("click", () => { dcNotice = null; $("dcResult").innerHTML = ""; send("dc_reset"); });
+$("btnDrive").addEventListener("click", () => send("drive"));
+$("btnCalibrate").addEventListener("click", () => {
+  calibration = { phase: "requested" };
+  status("calStatus", "Запуск калибровки…", "warn");
+  send("calibrate");
+  // The mouse only starts a calibration while it is running normally
+  setTimeout(() => {
+    if (calibration && calibration.phase === "requested") {
+      calibration = null;
+      status("calStatus", "Мышь не начала калибровку. Дождитесь состояния «Работает» и попробуйте ещё раз.", "err");
+    }
+  }, 3000);
+});
+
+buildAxes();
+buildSettings();
+
+if (!("serial" in navigator)) {
+  $("noSerial").classList.remove("hidden");
+  $("btnConnect").disabled = true;
+} else {
+  // Reconnect automatically to a mouse this page was allowed to use before
+  navigator.serial.getPorts().then(ports => {
+    const known = ports.find(p => p.getInfo().usbVendorId === 0x256F);
+    if (known && !port) connect(known);
+  });
+  navigator.serial.addEventListener("connect", e => {
+    if (!port && e.target.getInfo().usbVendorId === 0x256F) connect(e.target);
+  });
+  navigator.serial.addEventListener("disconnect", e => {
+    if (port && e.target === port) { log("Мышь отключена", "err"); cleanup(); }
+  });
+}
+</script>
+</body>
+</html>

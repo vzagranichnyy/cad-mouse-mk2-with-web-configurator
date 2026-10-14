@@ -1,3 +1,4 @@
 .pio
 .vscode
 .DS_Store
+firmware/lib/config_drive/drive_image.h

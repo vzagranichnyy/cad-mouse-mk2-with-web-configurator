@@ -169,14 +169,27 @@ void exitSleep()
     set_sys_clock_khz((g_awake_sys_clock_hz + 999u) / 1000u, true);
 
     // set_sys_clock_khz() deliberately moves clk_peri to a safe 48 MHz source.
-    // Put it back on clk_sys so I2C and the other peripherals regain their
-    // original active-state rate after wake.
-    clock_configure(
-      clk_peri,
-      0,
-      CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS,
-      clock_get_hz(clk_sys),
-      g_awake_peri_clock_hz);
+    // Put it back on clk_sys only if it ran from there before sleep, so I2C and
+    // the other peripherals regain their original active-state rate after wake.
+    // With a non-default F_CPU the core already boots with clk_peri at 48 MHz.
+    if (clock_get_hz(clk_peri) != g_awake_peri_clock_hz) {
+#ifdef BOARD_RP2040
+        // RP2040 clk_peri has no divider: clock_configure() would record the
+        // requested rate while the hardware runs at clk_sys.
+        clock_configure_undivided(
+          clk_peri,
+          0,
+          CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS,
+          clock_get_hz(clk_sys));
+#else
+        clock_configure(
+          clk_peri,
+          0,
+          CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS,
+          clock_get_hz(clk_sys),
+          g_awake_peri_clock_hz);
+#endif
+    }
     g_sleep_clocks_active = false;
 #endif
 }

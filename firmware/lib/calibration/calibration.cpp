@@ -317,10 +317,11 @@ bool Calibration::compute_calibration(float magnetic_moments[3], float offsets[6
     CAL_LOG_PRINTLN();
 #endif
 
-    // Error check: If the refined magnetic moments are out of bounds, or too small
+    // Error check: If the refined magnetic moments are at bounds, or too small.
+    // solve_least_squares() clamps to the bounds, so a value at a bound means the fit wanted to go further.
     bool moments_out_of_bounds[3] = {false, false, false};
     for (int i = 0; i < 3; ++i) {
-        if (fitted_magnetic_moments[i] < min_bounds[i] || fitted_magnetic_moments[i] > max_bounds[i]) {
+        if (fitted_magnetic_moments[i] <= min_bounds[i] || fitted_magnetic_moments[i] >= max_bounds[i]) {
             moments_out_of_bounds[i] = true;
         }
     }
@@ -371,10 +372,10 @@ bool Calibration::compute_calibration(float magnetic_moments[3], float offsets[6
     CAL_LOG_PRINTLN();
 #endif
 
-    // Final error check: If the refined offsets are out of bounds
+    // Final error check: If the refined offsets are at bounds (clamped by solve_least_squares)
     bool offsets_out_of_bounds[6] = {false, false, false, false, false, false};
     for (int i = 0; i < 6; ++i) {
-        if (fitted_offsets[i] < min_bounds_offsets[i] || fitted_offsets[i] > max_bounds_offsets[i]) {
+        if (fitted_offsets[i] <= min_bounds_offsets[i] || fitted_offsets[i] >= max_bounds_offsets[i]) {
             offsets_out_of_bounds[i] = true;
         }
     }

@@ -4,7 +4,10 @@
 
 #include "button_controller.h"
 #include "calibration.h"
+#include "config_drive.h"
+#include "configurator.h"
 #include "core_mailbox.h"
+#include "decoupling.h"
 #include "dipole_model.h"
 #include "extended_kalman_filter.h"
 #include "hall_controller.h"
@@ -13,6 +16,7 @@
 #include "normalization.h"
 #include "performance_profiler.h"
 #include "power_manager.h"
+#include "settings.h"
 #include "sleep_controller.h"
 #include "state_machine.h"
 
@@ -72,6 +76,9 @@ HIDController hidController = HIDController();
 SleepController sleepController = SleepController();
 
 float latest_estimated_state[12] = {0.0f};
+float latest_pose[6] = {0.0f};     // Normalized pose before deadzones, for the configurator
+float latest_raw_pose[6] = {0.0f}; // Physical pose before decoupling, for the configurator
+float filter_rate_hz = 0.0f;
 
 #if defined(ENABLE_PERFORMANCE_PROFILING) && (PERFORMANCE_PROFILING_LEVEL == 1)
 namespace {
@@ -145,6 +152,9 @@ void setup()
 
     Serial.begin(115200);
 
+    // Show the configurator USB drive when a button is held at plug-in; must precede the HID re-enumeration
+    ConfigDrive::begin(PIN_LEFT_BTN, PIN_RIGHT_BTN);
+
     // Initialize HID controller for USB communication
     hidController.begin();
 
@@ -164,6 +174,10 @@ void setup()
     if (!Calibration::initialize_filesystem()) {
         ledController.queue_blinking_animation(LED_CALIBRATION_FAILURE_COLOR, 200, 200, 1); // blink MAGENTA one time to indicate filesystem initialization failure
     }
+
+    // Load saved configurator settings (or config.h defaults) and the decoupling matrix
+    Settings::begin();
+    Decoupling::begin();
 }
 
 void loop()
@@ -238,6 +252,7 @@ void loop()
 
         case StateMachine::State::CALIBRATE_COMPUTE: {
             stateMachine.handle_CALIBRATE_COMPUTE();
+            Normalization::request_rest_offset_reset(); // The rest pose changes with the calibration
             break;
         }
 
@@ -266,6 +281,13 @@ void loop()
                 for (int index = 0; index < 12; ++index) {
                     latest_estimated_state[index] = local_filtered.state[index];
                 }
+                for (int index = 0; index < 6; ++index) {
+                    latest_pose[index] = local_filtered.pose[index];
+                    latest_raw_pose[index] = local_filtered.raw_pose[index];
+                }
+                if (local_filtered.dt > 0.0f) {
+                    filter_rate_hz += 0.05f * (1.0f / local_filtered.dt - filter_rate_hz);
+                }
 
                 // Print roundtrip time between consecutive readings->filtering->return
                 // Implies frequency of HID updates must be less than this
@@ -281,6 +303,7 @@ void loop()
                 // Helpers::print_condensed_estimated_state(latest_estimated_state);
 #endif
             }
+
 
             PERFORMANCE_BEGIN(0, PerformanceProfiler::Section::CORE0_SENSOR_READ);
             sensor_status = hallController.read(rawSensorData);
@@ -301,7 +324,9 @@ void loop()
             }
 
             const bool wake_grace_active = sleepController.wakeGraceActive(now);
-            if (!wake_grace_active && now - hidController.get_last_report_time_ms() > RUNNING_STATE_INACTIVITY_TIMEOUT_MS) {
+            const uint32_t inactivity_timeout_ms = static_cast<uint32_t>(Settings::get().sleep_timeout_s * 1000.0f);
+            const bool sleep_allowed = inactivity_timeout_ms > 0 && !Configurator::active(); // 0 = never sleep
+            if (sleep_allowed && !wake_grace_active && now - hidController.get_last_report_time_ms() > inactivity_timeout_ms) {
                 // Transition to SLEEP on inactivity.
                 // We can infer inactivity by checking time last HID report was sent
                 // as we only send HID on changes in axes or buttons.
@@ -320,7 +345,10 @@ void loop()
 
         case StateMachine::State::SLEEP: {
             CoreMailbox::setCore1Sleeping(true);
-            const bool host_activity_recent = sleepController.wakeGraceActive(now) || now - hidController.get_last_report_time_ms() <= RUNNING_STATE_INACTIVITY_TIMEOUT_MS;
+            const uint32_t inactivity_timeout_ms = static_cast<uint32_t>(Settings::get().sleep_timeout_s * 1000.0f);
+            const bool host_activity_recent = sleepController.wakeGraceActive(now) ||
+                                              now - hidController.get_last_report_time_ms() <= inactivity_timeout_ms ||
+                                              Configurator::active(); // Wake when the configurator page connects
             const SleepController::Result sleep_result = sleepController.update(now, host_activity_recent, hallController, ledController);
 
             if (sleep_result == SleepController::Result::SENSOR_TIMEOUT) {
@@ -386,6 +414,21 @@ void loop()
     }
     hidController.sendReport(latest_estimated_state, buttons, false);
 
+    // Configurator page over USB serial
+    if (Configurator::poll(dipoleModel) == Configurator::Request::CALIBRATE &&
+        (current_state == StateMachine::State::RUNNING || current_state == StateMachine::State::RUNNING_WITHOUT_CALIBRATION)) {
+        stateMachine.enter_CALIBRATE_COLLECT();
+    }
+    Configurator::Telemetry telemetry;
+    telemetry.state = static_cast<int>(stateMachine.get_state());
+    telemetry.calibration_state = static_cast<int>(stateMachine.get_calibration_load_state());
+    telemetry.pose = latest_pose;
+    telemetry.raw_pose = latest_raw_pose;
+    telemetry.output = latest_estimated_state;
+    telemetry.buttons = buttons;
+    telemetry.filter_hz = filter_rate_hz;
+    Configurator::stream(now, telemetry);
+
     // LED controller update
     ledController.update(latest_estimated_state[0], latest_estimated_state[1], latest_estimated_state[2], latest_estimated_state[3], latest_estimated_state[4], latest_estimated_state[5]);
 
@@ -408,14 +451,27 @@ void setup1()
 void loop1()
 {
     if (CoreMailbox::core1Sleeping()) {
-        delay(SLEEP_SAMPLE_INTERVAL_MS);
+        // Poll the flag every 1 ms instead of SLEEP_SAMPLE_INTERVAL_MS, so Core 1
+        // resumes right after wake. Core 0 expects filtered data within
+        // RUNNING_STATE_READ_ERROR_TIMEOUT_MS, which is not longer than 100 ms.
+        delay(1);
         return;
     }
 
     static uint32_t last_time_us = 0;
     static uint32_t last_raw_seq = 0;
     static bool is_first_run = true;
+    static Settings::Values settings = Settings::defaults();
+    static uint32_t settings_seq = 0;
+    static Decoupling::Matrix decoupling = Decoupling::identity();
+    static uint32_t decoupling_seq = 0;
     CoreMailbox::RawSensorData local_sample = {};
+
+    // Pick up settings changed by the configurator
+    if (Settings::fetch(settings_seq, settings)) {
+        ekf.set_noise(settings.ekf_process_noise_std, settings.ekf_sensor_noise_std);
+    }
+    Decoupling::fetch(decoupling_seq, decoupling);
 
     if (!CoreMailbox::consumeRaw(last_raw_seq, local_sample)) {
         return;
@@ -437,9 +493,11 @@ void loop1()
 
         float estimated_state_first[12];
         float deadzone_normalized_state_first[12];
+        float pose_first[6];
+        float raw_pose_first[6];
         ekf.get_state(estimated_state_first);
-        Normalization::apply_normalization_deadzone_isolation(estimated_state_first, deadzone_normalized_state_first);
-        CoreMailbox::publishFiltered(deadzone_normalized_state_first, 0.0f);
+        Normalization::apply_normalization_deadzone_isolation(estimated_state_first, deadzone_normalized_state_first, 0.0f, settings, decoupling, pose_first, raw_pose_first);
+        CoreMailbox::publishFiltered(deadzone_normalized_state_first, pose_first, raw_pose_first, 0.0f);
         return;
     }
 
@@ -479,11 +537,13 @@ void loop1()
     // - applies deadzone to trans vector magnitude and rot vector magnitude
     // - applies curved isolation over all 6 DoF combined (power law + renormalization) and applies same factor to velocities
     float deadzone_normalized_state[12];
+    float pose[6];
+    float raw_pose[6];
     PERFORMANCE_BEGIN(1, PerformanceProfiler::Section::CORE1_NORMALIZATION);
-    Normalization::apply_normalization_deadzone_isolation(estimated_state, deadzone_normalized_state);
+    Normalization::apply_normalization_deadzone_isolation(estimated_state, deadzone_normalized_state, dt, settings, decoupling, pose, raw_pose);
     PERFORMANCE_END(1, PerformanceProfiler::Section::CORE1_NORMALIZATION);
 
-    CoreMailbox::publishFiltered(deadzone_normalized_state, dt);
+    CoreMailbox::publishFiltered(deadzone_normalized_state, pose, raw_pose, dt);
 
     PERFORMANCE_END(1, PerformanceProfiler::Section::CORE1_TOTAL);
 

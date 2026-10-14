@@ -24,13 +24,22 @@ void ButtonController::handleButtonEvent(ace_button::AceButton* button, uint8_t 
 {
     uint32_t now = millis();
 
+    // A release must never be dropped, otherwise the host keeps the button pressed.
+    // It also cancels a pending long press that has not turned into a combo yet.
+    if (eventType == ace_button::AceButton::kEventReleased) {
+        if (button == &m_buttonLeft) {
+            m_buttonLeftState = ButtonState::RELEASED;
+        }
+        else if (button == &m_buttonRight) {
+            m_buttonRightState = ButtonState::RELEASED;
+        }
+        return;
+    }
+
     // Handle left button events
     if (m_buttonLeftState == ButtonController::ButtonState::IDLE && button == &m_buttonLeft) {
         if (eventType == ace_button::AceButton::kEventPressed) {
             m_buttonLeftState = ButtonState::PRESSED;
-        }
-        else if (eventType == ace_button::AceButton::kEventReleased) {
-            m_buttonLeftState = ButtonState::RELEASED;
         }
         else if (eventType == ace_button::AceButton::kEventLongPressed) {
             m_buttonLeftState = ButtonState::PENDING_LONG_PRESS;
@@ -42,9 +51,6 @@ void ButtonController::handleButtonEvent(ace_button::AceButton* button, uint8_t 
     if (m_buttonRightState == ButtonController::ButtonState::IDLE && button == &m_buttonRight) {
         if (eventType == ace_button::AceButton::kEventPressed) {
             m_buttonRightState = ButtonState::PRESSED;
-        }
-        else if (eventType == ace_button::AceButton::kEventReleased) {
-            m_buttonRightState = ButtonState::RELEASED;
         }
         else if (eventType == ace_button::AceButton::kEventLongPressed) {
             m_buttonRightState = ButtonState::PENDING_LONG_PRESS;

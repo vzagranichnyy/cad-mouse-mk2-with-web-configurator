@@ -8,6 +8,7 @@ class ExtendedKalmanFilter {
 public:
     ExtendedKalmanFilter();
     void init(const float initial_state[6], float process_noise_std, float sensor_noise_std);
+    void set_noise(float process_noise_std, float sensor_noise_std);
     void predict(float dt);
     void update(float sensor_readings[9], DipoleModel& dipole_model);
     void get_state(float state_out[12]);

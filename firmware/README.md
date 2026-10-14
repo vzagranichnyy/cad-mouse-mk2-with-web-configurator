@@ -24,7 +24,9 @@ The project now provides two PlatformIO environments:
 - `RP2040`
 - `RP2350`
 
-`RP2350` is currently the default environment in `platformio.ini`.
+`RP2040` is the default environment in `platformio.ini`; it runs the RP2040 at
+200 MHz (`board_build.f_cpu`), which the core supports by raising the core
+voltage to 1.15 V.
 
 ## Performance Status
 
@@ -118,6 +120,61 @@ the filesystem is currently used exclusively for calibration persistence.
 `0x00FFFF`, but one is a queued event and the other is a permanent dynamic
 effect.
 
+### Configurator
+
+`tools/configurator.html` tunes the mouse live without reflashing. Open it in
+Chrome or Edge (it uses Web Serial), click "Подключить мышь" and pick the CAD
+Mouse port. It shows all six axes before and after the deadzones, changes the
+settings below immediately, runs a calibration, and stores the settings in
+LittleFS (`/settings.bin`). Saved settings override the `config.h` defaults on
+boot; "По умолчанию" restores the `config.h` values.
+
+#### Page on the mouse
+
+The page is also stored in the mouse. Hold one button while plugging the mouse
+in and it additionally shows up as a read-only USB drive `CADMOUSE` with
+`configurator.html`; plug it in again without a button to hide the drive. Do
+not hold both buttons, a long press of both starts a calibration. The page's
+"Показать диск сейчас" button (command `drive`) reboots straight into drive
+mode.
+
+The disk image is a FAT12 volume generated from `tools/configurator.html` by
+`tools/make_drive_image.py`, which PlatformIO runs before every build
+(`extra_scripts`). The generated `lib/config_drive/drive_image.h` is not
+committed.
+
+#### Axis decoupling
+
+The "Развязка осей" wizard asks to move the knob in 12 directions, records the
+physical pose (mm, rad) of all six axes, and fits a 6x6 matrix that keeps the
+intended axis and removes the response of the others (least squares with a
+small pull towards identity, on axes scaled by their full-scale travel). The
+matrix is applied before normalization (`lib/decoupling`), so it does not depend
+on the sensitivity settings, and is stored in LittleFS (`/decoupling.bin`).
+With good decoupling `ISOLATION_POWER` can be lowered to about 1.5–2 for more
+natural combined movements.
+
+#### Protocol
+
+The page talks a line-based protocol over the USB serial port; replies are
+single-line JSON objects:
+
+| Command | Effect |
+| --- | --- |
+| `get` | Print the current settings |
+| `set <key> <value>` | Change one setting immediately (clamped to its range) |
+| `save` / `reload` / `defaults` | Store, reload the stored, or restore `config.h` settings |
+| `dc_get` / `dc_set <36 values>` | Print or replace the decoupling matrix (row by row) |
+| `dc_on <0\|1>` | Apply or bypass the decoupling matrix |
+| `dc_save` / `dc_reload` / `dc_reset` | Store, reload the stored, or reset to identity (off) |
+| `info` | Firmware version, CPU clock, drive mode, calibrated magnetic moments and offsets |
+| `stream 1` / `stream 2` / `stream 0` | ~30 Hz telemetry; `2` adds the physical pose for the wizard; the mouse stays awake while streaming |
+| `calibrate` | Start a calibration, same as a long press of both buttons |
+| `drive` / `reboot` | Reboot with or without the configurator drive |
+
+Setting keys and ranges are defined in `lib/settings/settings.cpp` and must
+match the page.
+
 ### Quick Tuning Guide
 
 The filtering pipeline is applied in this order:
@@ -154,6 +211,17 @@ The filtering pipeline is applied in this order:
      processing.
    - Values outside the deadzone are rescaled to preserve the full usable
      range.
+   - `DEADZONE_CROSS_AXIS_RATIO`: ignores axes weaker than this share of the
+     strongest of all six axes, e.g. the slight tilt that comes with a sideways
+     push. Stronger axes shrink smoothly and the dominant axis is unchanged.
+     `0` (default) disables it; higher values isolate more but make combined
+     movements harder, and a slight push when grabbing the knob can win the
+     start of every movement.
+   - `AUTO_ZERO_TIME_CONSTANT_S`: while the knob rests inside both deadzones,
+     the rest pose is followed with this time constant and subtracted, so
+     spring creep and hysteresis do not bias the next movement. The learned
+     offset is limited to half a deadzone, so it always heals itself, and it is
+     reset after a calibration. `0` (default) disables it.
 4. 6DoF isolation emphasizes the dominant movement and suppresses unintended
    secondary axes.
    - `ISOLATION_POWER`: controls how strongly the dominant movement is emphasized
