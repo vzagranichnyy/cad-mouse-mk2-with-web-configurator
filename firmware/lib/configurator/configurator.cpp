@@ -7,7 +7,6 @@
 #include "config.h"
 #include "config_drive.h"
 #include "decoupling.h"
-#include "nomad_mode.h"
 #include "normalization.h"
 #include "settings.h"
 
@@ -45,41 +44,6 @@ namespace Configurator {
                 Serial.print(static_cast<long>(lroundf(values[i] * scale)));
             }
             Serial.print(']');
-        }
-
-        // nm_set: target[6] sign[6] rotate_speed pan_speed zoom_speed rotate_button pan_button
-        //         rotate_modifier pan_modifier left_modifier left_key right_modifier right_key restore_cursor
-        void handle_nomad_mode_set()
-        {
-            float values[24];
-            for (size_t i = 0; i < sizeof(values) / sizeof(values[0]); ++i) {
-                char* value_text = strtok(nullptr, " \t");
-                char* end = nullptr;
-                values[i] = value_text != nullptr ? strtof(value_text, &end) : 0.0f;
-                if (value_text == nullptr || end == value_text || !isfinite(values[i]) || values[i] < -255.0f || values[i] > 5000.0f) {
-                    print_error("usage: nm_set <24 values>");
-                    return;
-                }
-            }
-            NomadMode::Config config = NomadMode::get();
-            for (int i = 0; i < 6; ++i) {
-                config.target[i] = static_cast<uint8_t>(values[i]);
-                config.sign[i] = values[6 + i] < 0.0f ? -1 : 1;
-            }
-            config.rotate_speed = values[12];
-            config.pan_speed = values[13];
-            config.zoom_speed = values[14];
-            config.rotate_button = static_cast<uint8_t>(values[15]);
-            config.pan_button = static_cast<uint8_t>(values[16]);
-            config.rotate_modifier = static_cast<uint8_t>(values[17]);
-            config.pan_modifier = static_cast<uint8_t>(values[18]);
-            config.button_modifier[0] = static_cast<uint8_t>(values[19]);
-            config.button_key[0] = static_cast<uint8_t>(values[20]);
-            config.button_modifier[1] = static_cast<uint8_t>(values[21]);
-            config.button_key[1] = static_cast<uint8_t>(values[22]);
-            config.restore_cursor = values[23] != 0.0f ? 1 : 0;
-            NomadMode::set(config);
-            NomadMode::print_json(Serial);
         }
 
         void handle_decoupling_set()
@@ -210,33 +174,6 @@ namespace Configurator {
                 Decoupling::publish(Decoupling::identity());
                 Decoupling::print_json(Serial);
             }
-            else if (strcmp(command, "nm_get") == 0) {
-                NomadMode::print_json(Serial);
-            }
-            else if (strcmp(command, "nm_set") == 0) {
-                handle_nomad_mode_set();
-            }
-            else if (strcmp(command, "nm_on") == 0) {
-                char* argument = strtok(nullptr, " \t");
-                return argument != nullptr && atoi(argument) != 0 ? Request::NOMAD_MODE_ON : Request::NOMAD_MODE_OFF;
-            }
-            else if (strcmp(command, "nm_save") == 0) {
-                if (NomadMode::save()) {
-                    print_ok("nm_save");
-                }
-                else {
-                    print_error("nm_save failed");
-                }
-            }
-#ifdef NOMAD_MODE_SELFTEST
-            else if (strcmp(command, "nm_test") == 0) {
-                NomadMode::self_test(Serial);
-            }
-#endif
-            else if (strcmp(command, "nm_defaults") == 0) {
-                NomadMode::set(NomadMode::defaults());
-                NomadMode::print_json(Serial);
-            }
             else if (strcmp(command, "info") == 0) {
                 print_info(dipole_model);
             }
@@ -325,10 +262,6 @@ namespace Configurator {
         Serial.print(telemetry.buttons);
         Serial.print(",\"hz\":");
         Serial.print(static_cast<long>(lroundf(telemetry.filter_hz)));
-        Serial.print(",\"nm\":");
-        Serial.print(telemetry.nomad_mode ? 1 : 0);
-        Serial.print(",\"ng\":");
-        Serial.print(telemetry.nomad_gesture);
         print_scaled_array("p", telemetry.pose, 6, 1000.0f);
         print_scaled_array("o", telemetry.output, 6, 1000.0f);
         print_scaled_array("az", rest_offset, 6, 1000.0f);

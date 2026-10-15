@@ -222,28 +222,6 @@
   table.result td.num, table.result th.num { text-align: right; }
   .better { color: var(--ok); }
 
-  /* Nomad mode */
-  .nm-axes { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 6px 10px; align-items: center; margin-top: 12px; }
-  .nm-axes .name { color: var(--text); }
-  .nm-axes .name span { color: var(--muted); font-size: 12px; display: block; }
-  .nm-axes select, .nm-row select {
-    font: inherit; padding: 5px 6px; border-radius: 6px; border: 1px solid var(--line);
-    background: var(--bg); color: var(--text); width: 100%;
-  }
-  .nm-axes label, .nm-check { color: var(--muted); font-size: 12.5px; white-space: nowrap; display: flex; align-items: center; gap: 5px; }
-  .nm-row { display: grid; grid-template-columns: minmax(0, 1fr) 120px 110px; gap: 8px 10px; align-items: center; margin-top: 8px; }
-  .keycap {
-    font: 600 13px/1 ui-monospace, Consolas, monospace;
-    padding: 7px 8px;
-    border-radius: 6px;
-    border: 1px solid var(--line);
-    background: var(--bg);
-    color: var(--text);
-    text-align: center;
-  }
-  .keycap.empty { color: var(--muted); font-weight: 400; }
-  .keycap.listening { border-color: var(--accent); color: var(--accent); }
-  .clear { padding: 4px 0; text-align: center; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -254,7 +232,6 @@
     <span class="chip hidden" id="chipState"></span>
     <span class="chip hidden" id="chipRate"></span>
     <span class="chip hidden" id="chipCal"></span>
-    <span class="chip hidden" id="chipNomad" style="color:#8b5cf6">Режим Nomad</span>
   </div>
   <button class="primary" id="btnConnect">Подключить мышь</button>
 </header>
@@ -341,33 +318,6 @@
       <h2>Чувствительность</h2>
       <p class="hint" style="margin-top:0">Ход ручки, при котором мышь выдаёт полную скорость. Меньше — чувствительнее. Можно задать разные значения для каждого направления.</p>
       <div class="sens" id="sens" style="margin-top:12px"></div>
-    </section>
-
-    <section class="card">
-      <h2>Режим Nomad</h2>
-      <p class="hint" style="margin-top:0">Ручка управляет камерой Nomad Sculpt через его собственные привязки мыши: вращение — правая кнопка, панорама — средняя, зум — колесо (как в меню «Привязки» Nomad, с Force camera). Пока режим включён, 3D-мышь для системы молчит, поэтому драйвер 3Dconnexion и встроенная поддержка 3D-мыши в Nomad не мешают. Включается долгим нажатием правой кнопки (1,5 с, три фиолетовые вспышки) или кнопкой ниже; после подключения мышь всегда в режиме CAD.</p>
-      <div class="actions" style="margin-top:10px">
-        <button class="primary" id="btnNmToggle" disabled>Включить</button>
-        <button id="btnNmSave" disabled>Сохранить в мышь</button>
-        <button id="btnNmDefaults" disabled>По умолчанию для Nomad</button>
-      </div>
-      <div class="status-line" id="nmStatus"></div>
-
-      <h3 style="margin-top:14px">Оси</h3>
-      <div class="nm-axes" id="nmAxes"></div>
-
-      <h3 style="margin-top:18px">Скорость</h3>
-      <div id="nmSpeeds"></div>
-
-      <h3 style="margin-top:18px">Кнопки мыши в Nomad</h3>
-      <div class="nm-row"><span>Вращение</span><select id="nmRotateButton" disabled></select><select id="nmRotateMod" disabled></select></div>
-      <div class="nm-row"><span>Панорама</span><select id="nmPanButton" disabled></select><select id="nmPanMod" disabled></select></div>
-      <label class="nm-check" style="margin-top:10px"><input type="checkbox" id="nmRestore" disabled> Возвращать курсор на место после движения</label>
-
-      <h3 style="margin-top:18px">Кнопки ручки (короткое нажатие)</h3>
-      <div class="nm-row"><span>Левая</span><button class="keycap empty" id="nmKey0" disabled></button><button class="clear" id="nmClear0" disabled title="Убрать">×</button></div>
-      <div class="nm-row"><span>Правая</span><button class="keycap empty" id="nmKey1" disabled></button><button class="clear" id="nmClear1" disabled title="Убрать">×</button></div>
-      <p class="hint">Нажмите на поле, затем сочетание клавиш, например Ctrl+Z. Esc отменяет выбор. По умолчанию: отмена (Ctrl+Z) и «показать модель» (Ctrl+Space).</p>
     </section>
 
     <section class="card">
@@ -542,10 +492,7 @@ function showValue(key, value, fromUser) {
 
 function setEnabled(enabled) {
   for (const c of Object.values(controls)) { c.range.disabled = !enabled; c.number.disabled = !enabled; }
-  for (const id of ["btnSave", "btnReload", "btnDefaults", "btnCalibrate", "btnDcStart", "btnDcToggle", "btnDcSave", "btnDcReset", "btnDrive",
-                    "btnNmToggle", "btnNmSave", "btnNmDefaults", "nmRotateButton", "nmPanButton", "nmRotateMod", "nmPanMod", "nmRestore",
-                    "nmKey0", "nmKey1", "nmClear0", "nmClear1", "nm_rs", "nm_ps", "nm_zs"]) $(id).disabled = !enabled;
-  for (let i = 0; i < 6; i++) { $("nmTarget" + i).disabled = !enabled; $("nmSign" + i).disabled = !enabled; }
+  for (const id of ["btnSave", "btnReload", "btnDefaults", "btnCalibrate", "btnDcStart", "btnDcToggle", "btnDcSave", "btnDcReset", "btnDrive"]) $(id).disabled = !enabled;
 }
 
 // ---------- Serial ----------
@@ -585,7 +532,6 @@ async function connect(chosenPort) {
     await send("info");
     await send("get");
     await send("dc_get");
-    await send("nm_get");
     setTimeout(() => { if (port && !gotSettings) $("oldFirmware").classList.remove("hidden"); }, 2500);
   } catch (e) {
     if (e.name !== "NotFoundError") log("Не удалось подключиться: " + e.message, "err");
@@ -642,9 +588,6 @@ function setConnected(connected) {
     $("oldFirmware").classList.add("hidden");
     if (wizard) { wizard = null; $("dcWizard").classList.add("hidden"); status("dcStatus", "Измерение прервано: мышь отключилась", "err"); }
     dcSaved = null;
-    nmSaved = null;
-    nmListening = -1;
-    $("chipNomad").classList.add("hidden");
   }
 }
 
@@ -658,20 +601,17 @@ function handleLine(line) {
     case "settings": onSettings(msg.v); break;
     case "info": onInfo(msg); log("← сведения о прошивке получены", "muted"); break;
     case "dc": onDecoupling(msg); break;
-    case "nm": onNomad(msg); break;
     case "ok":
       log("← готово: " + msg.cmd, "muted");
       if (msg.cmd === "save") { saved = { ...settings }; updateDirty(); status("saveStatus", "Сохранено в мышь", "ok"); }
       if (msg.cmd === "dc_save" && dcState) { dcSaved = JSON.stringify(dcState); dcNotice = null; onDecoupling(dcState); }
       if (msg.cmd === "drive") log("Мышь перезагружается с диском CADMOUSE", "muted");
-      if (msg.cmd === "nm_save" && nmState) { nmSaved = nomadConfigKey(nmState); renderNomad(); }
       break;
     case "err":
       log("← ошибка: " + msg.msg, "err");
       if (msg.msg === "save failed") status("saveStatus", "Не удалось сохранить", "err");
       if (msg.msg === "no saved settings") status("saveStatus", "В мыши нет сохранённых настроек", "warn");
       if (msg.msg === "dc_save failed") status("dcStatus", "Не удалось сохранить развязку", "err");
-      if (msg.msg === "nm_save failed") status("nmStatus", "Не удалось сохранить режим Nomad", "err");
       break;
     default: log(line);
   }
@@ -738,7 +678,6 @@ function onTelemetry(t) {
 
   trackCalibration(t);
   trackWizard(t);
-  onNomadTelemetry(t);
 }
 
 function placeBar(el, value) {
@@ -974,175 +913,6 @@ function finishWizard() {
   send("dc_on 1");
 }
 
-// ---------- Nomad mode ----------
-
-// Order matches NomadMode::Target in firmware/lib/nomad_mode/nomad_mode.h
-const NM_TARGETS = ["—", "Вращение ↔", "Вращение ↕", "Панорама ↔", "Панорама ↕", "Зум"];
-const NM_AXES = [
-  ["X", "сдвиг вбок"], ["Y", "сдвиг вперёд-назад"], ["Z", "вверх-вниз"],
-  ["RX", "наклон вперёд-назад"], ["RY", "наклон вбок"], ["RZ", "поворот"],
-];
-const NM_BUTTONS = [[2, "Правая"], [4, "Средняя"], [1, "Левая"]];
-const NM_MODIFIERS = [[0, "без клавиши"], [1, "+ Ctrl"], [2, "+ Shift"], [4, "+ Alt"]];
-const NM_SPEEDS = [
-  { key: "rs", label: "Вращение", min: 100, max: 3000, step: 50, fmt: v => Math.round(v) + " пикс/с" },
-  { key: "ps", label: "Панорама", min: 100, max: 3000, step: 50, fmt: v => Math.round(v) + " пикс/с" },
-  { key: "zs", label: "Зум", min: 1, max: 30, step: 0.5, fmt: v => v.toFixed(1) + " щелч./с" },
-];
-const NM_GESTURES = ["", "вращение", "панорама"];
-
-// Browser KeyboardEvent.code -> HID keyboard usage ID and label
-const HID_KEYS = {};
-"ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").forEach((c, i) => { HID_KEYS["Key" + c] = [0x04 + i, c]; });
-"1234567890".split("").forEach((c, i) => { HID_KEYS["Digit" + c] = [0x1E + i, c]; });
-for (let i = 1; i <= 12; i++) HID_KEYS["F" + i] = [0x39 + i, "F" + i];
-"1234567890".split("").forEach((c, i) => { HID_KEYS["Numpad" + c] = [0x59 + i, "Num " + c]; });
-Object.assign(HID_KEYS, {
-  Enter: [0x28, "Enter"], Escape: [0x29, "Esc"], Backspace: [0x2A, "Backspace"], Tab: [0x2B, "Tab"],
-  Space: [0x2C, "Пробел"], Minus: [0x2D, "-"], Equal: [0x2E, "="], BracketLeft: [0x2F, "["], BracketRight: [0x30, "]"],
-  Backslash: [0x31, "\\"], Semicolon: [0x33, ";"], Quote: [0x34, "'"], Backquote: [0x35, "`"], Comma: [0x36, ","],
-  Period: [0x37, "."], Slash: [0x38, "/"], CapsLock: [0x39, "Caps Lock"], Insert: [0x49, "Insert"], Home: [0x4A, "Home"],
-  PageUp: [0x4B, "PgUp"], Delete: [0x4C, "Delete"], End: [0x4D, "End"], PageDown: [0x4E, "PgDn"],
-  ArrowRight: [0x4F, "→"], ArrowLeft: [0x50, "←"], ArrowDown: [0x51, "↓"], ArrowUp: [0x52, "↑"],
-  NumpadDivide: [0x54, "Num /"], NumpadMultiply: [0x55, "Num *"], NumpadSubtract: [0x56, "Num -"], NumpadAdd: [0x57, "Num +"],
-  NumpadEnter: [0x58, "Num Enter"], NumpadDecimal: [0x63, "Num ."],
-  ControlLeft: [0xE0, "Ctrl"], ShiftLeft: [0xE1, "Shift"], AltLeft: [0xE2, "Alt"],
-  ControlRight: [0xE4, "Ctrl прав."], ShiftRight: [0xE5, "Shift прав."], AltRight: [0xE6, "Alt прав."],
-});
-const HID_LABELS = {};
-for (const [hid, label] of Object.values(HID_KEYS)) HID_LABELS[hid] = label;
-
-let nmState = null;     // configuration and on/off as reported by the mouse
-let nmSaved = null;     // configuration known to be stored in the mouse
-let nmListening = -1;   // knob button (0, 1) waiting for a shortcut
-
-function fillSelect(id, options) {
-  $(id).innerHTML = options.map(([value, label]) => `<option value="${value}">${label}</option>`).join("");
-}
-
-function buildNomad() {
-  const axes = $("nmAxes");
-  NM_AXES.forEach(([axis, desc], i) => {
-    const name = document.createElement("div");
-    name.className = "name";
-    name.innerHTML = `${axis}<span>${desc}</span>`;
-    const select = document.createElement("select");
-    select.id = "nmTarget" + i;
-    select.disabled = true;
-    select.innerHTML = NM_TARGETS.map((label, value) => `<option value="${value}">${label}</option>`).join("");
-    select.addEventListener("change", () => { nmState.tg[i] = +select.value; sendNomadConfig(); renderNomad(); });
-    const invert = document.createElement("label");
-    invert.innerHTML = `<input type="checkbox" id="nmSign${i}" disabled> наоборот`;
-    invert.querySelector("input").addEventListener("change", e => { nmState.sg[i] = e.target.checked ? -1 : 1; sendNomadConfig(); renderNomad(); });
-    axes.append(name, select, invert);
-  });
-
-  const speeds = $("nmSpeeds");
-  for (const spec of NM_SPEEDS) {
-    const field = document.createElement("div");
-    field.className = "field";
-    field.innerHTML = `
-      <div class="field-head"><label for="nm_${spec.key}">${spec.label}</label><span id="nm_${spec.key}_value"></span></div>
-      <div class="field-row"><input type="range" id="nm_${spec.key}" min="${spec.min}" max="${spec.max}" step="${spec.step}" disabled><span></span></div>`;
-    speeds.appendChild(field);
-    field.querySelector("input").addEventListener("input", e => { nmState[spec.key] = parseFloat(e.target.value); sendNomadConfig(); renderNomad(); });
-  }
-  const p = speeds.lastElementChild;
-  p.insertAdjacentHTML("beforeend", '<p class="hint">Скорость при полном отклонении ручки. На неё влияет и скорость указателя в Windows.</p>');
-
-  fillSelect("nmRotateButton", NM_BUTTONS);
-  fillSelect("nmPanButton", NM_BUTTONS);
-  fillSelect("nmRotateMod", NM_MODIFIERS);
-  fillSelect("nmPanMod", NM_MODIFIERS);
-  for (const [id, key] of [["nmRotateButton", "rb"], ["nmPanButton", "pb"], ["nmRotateMod", "rm"], ["nmPanMod", "pm"]]) {
-    $(id).addEventListener("change", () => { nmState[key] = +$(id).value; sendNomadConfig(); renderNomad(); });
-  }
-  $("nmRestore").addEventListener("change", e => { nmState.rc = e.target.checked ? 1 : 0; sendNomadConfig(); renderNomad(); });
-  for (const i of [0, 1]) {
-    $("nmKey" + i).addEventListener("click", () => { nmListening = nmListening === i ? -1 : i; renderNomad(); });
-    $("nmClear" + i).addEventListener("click", () => { nmState.bm[i] = 0; nmState.bk[i] = 0; sendNomadConfig(); renderNomad(); });
-  }
-}
-
-const MODIFIER_CODES = ["ControlLeft", "ControlRight", "ShiftLeft", "ShiftRight", "AltLeft", "AltRight", "MetaLeft", "MetaRight"];
-document.addEventListener("keydown", e => {
-  if (nmListening < 0) return;
-  e.preventDefault();
-  e.stopPropagation();
-  if (e.code === "Escape") { nmListening = -1; renderNomad(); return; }
-  if (MODIFIER_CODES.includes(e.code)) return; // wait for the main key of the shortcut
-  const key = HID_KEYS[e.code];
-  if (!key || key[0] >= 0xE0) { status("nmStatus", "Эту клавишу назначить нельзя", "err"); return; }
-  nmState.bm[nmListening] = (e.ctrlKey ? 1 : 0) | (e.shiftKey ? 2 : 0) | (e.altKey ? 4 : 0);
-  nmState.bk[nmListening] = key[0];
-  nmListening = -1;
-  sendNomadConfig();
-  renderNomad();
-}, true);
-
-function shortcutLabel(modifier, key) {
-  if (!key) return "—";
-  const parts = [];
-  if (modifier & 1) parts.push("Ctrl");
-  if (modifier & 2) parts.push("Shift");
-  if (modifier & 4) parts.push("Alt");
-  parts.push(HID_LABELS[key] || "0x" + key.toString(16));
-  return parts.join("+");
-}
-
-let nmTimer = null;
-function sendNomadConfig() {
-  clearTimeout(nmTimer);
-  const c = nmState;
-  nmTimer = setTimeout(() => send("nm_set " + [...c.tg, ...c.sg, c.rs, c.ps, c.zs, c.rb, c.pb, c.rm, c.pm, c.bm[0], c.bk[0], c.bm[1], c.bk[1], c.rc].join(" ")), 150);
-}
-
-function nomadConfigKey(c) {
-  return JSON.stringify([c.tg, c.sg, c.rs, c.ps, c.zs, c.rb, c.pb, c.rm, c.pm, c.bm, c.bk, c.rc]);
-}
-
-function onNomad(msg) {
-  nmState = { ...msg, tg: msg.tg.slice(), sg: msg.sg.slice(), bm: msg.bm.slice(), bk: msg.bk.slice() };
-  if (nmSaved === null) nmSaved = nomadConfigKey(nmState);
-  renderNomad();
-}
-
-function renderNomad(gesture) {
-  if (!nmState) return;
-  $("btnNmToggle").textContent = nmState.on ? "Выключить" : "Включить";
-  $("chipNomad").classList.toggle("hidden", !nmState.on || !port);
-  NM_AXES.forEach((_, i) => {
-    $("nmTarget" + i).value = nmState.tg[i];
-    $("nmSign" + i).checked = nmState.sg[i] < 0;
-  });
-  for (const spec of NM_SPEEDS) {
-    const input = $("nm_" + spec.key);
-    if (document.activeElement !== input) input.value = nmState[spec.key];
-    $("nm_" + spec.key + "_value").textContent = spec.fmt(nmState[spec.key]);
-  }
-  $("nmRotateButton").value = nmState.rb;
-  $("nmPanButton").value = nmState.pb;
-  $("nmRotateMod").value = nmState.rm;
-  $("nmPanMod").value = nmState.pm;
-  $("nmRestore").checked = !!nmState.rc;
-  for (const i of [0, 1]) {
-    const cap = $("nmKey" + i);
-    cap.textContent = nmListening === i ? "нажмите…" : shortcutLabel(nmState.bm[i], nmState.bk[i]);
-    cap.classList.toggle("empty", !nmState.bk[i] && nmListening !== i);
-    cap.classList.toggle("listening", nmListening === i);
-  }
-  const saved = nomadConfigKey(nmState) === nmSaved;
-  const now = nmState.on && gesture ? " · сейчас: " + NM_GESTURES[gesture] : "";
-  status("nmStatus", (nmState.on ? "Режим Nomad включён" : "Режим Nomad выключен") + now + (saved ? "" : " · не сохранено"),
-         saved ? (nmState.on ? "ok" : "") : "warn");
-}
-
-function onNomadTelemetry(t) {
-  if (!nmState || t.nm === undefined) return;
-  nmState.on = t.nm;
-  renderNomad(t.ng);
-}
-
 // ---------- Wiring ----------
 // ---------- Wiring ----------
 
@@ -1157,9 +927,6 @@ $("btnDcToggle").addEventListener("click", () => { dcNotice = null; send("dc_on 
 $("btnDcSave").addEventListener("click", () => { dcNotice = null; send("dc_save"); });
 $("btnDcReset").addEventListener("click", () => { dcNotice = null; $("dcResult").innerHTML = ""; send("dc_reset"); });
 $("btnDrive").addEventListener("click", () => send("drive"));
-$("btnNmToggle").addEventListener("click", () => send("nm_on " + (nmState && nmState.on ? 0 : 1)));
-$("btnNmSave").addEventListener("click", () => send("nm_save"));
-$("btnNmDefaults").addEventListener("click", () => send("nm_defaults"));
 $("btnCalibrate").addEventListener("click", () => {
   calibration = { phase: "requested" };
   status("calStatus", "Запуск калибровки…", "warn");
@@ -1175,7 +942,6 @@ $("btnCalibrate").addEventListener("click", () => {
 
 buildAxes();
 buildSettings();
-buildNomad();
 
 if (!("serial" in navigator)) {
   $("noSerial").classList.remove("hidden");

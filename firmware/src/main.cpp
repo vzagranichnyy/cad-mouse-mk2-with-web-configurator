@@ -13,7 +13,6 @@
 #include "hall_controller.h"
 #include "hid_controller.h"
 #include "led_controller.h"
-#include "nomad_mode.h"
 #include "normalization.h"
 #include "performance_profiler.h"
 #include "power_manager.h"
@@ -147,30 +146,6 @@ namespace {
 }
 #endif
 
-// Set when the mode changes; buttons are ignored until all are released, so the
-// right button that toggled the mode does not also act as a 3D mouse button.
-bool suppress_buttons_until_release = false;
-
-void set_nomad_mode(bool enabled, StateMachine::State state)
-{
-    if (enabled == NomadMode::enabled()) {
-        return;
-    }
-    NomadMode::set_enabled(enabled);
-    suppress_buttons_until_release = true;
-    if (enabled) {
-        ledController.set_solid(LED_NOMAD_MODE_COLOR);
-        ledController.on();
-        ledController.queue_blinking_animation(LED_NOMAD_MODE_COLOR, 150, 150, 3); // three violet blinks: Nomad mode on
-    }
-    else {
-        const bool calibrated = state != StateMachine::State::RUNNING_WITHOUT_CALIBRATION;
-        ledController.set_solid(calibrated ? LED_RUNNING_COLOR : LED_RUNNING_WITHOUT_CALIBRATION_COLOR);
-        ledController.on();
-        ledController.queue_blinking_animation(LED_NOMAD_MODE_COLOR, 150, 150, 1); // one violet blink: Nomad mode off
-    }
-}
-
 void setup()
 {
     PowerManager::begin();
@@ -203,7 +178,6 @@ void setup()
     // Load saved configurator settings (or config.h defaults) and the decoupling matrix
     Settings::begin();
     Decoupling::begin();
-    NomadMode::begin();
 }
 
 void loop()
@@ -351,7 +325,7 @@ void loop()
 
             const bool wake_grace_active = sleepController.wakeGraceActive(now);
             const uint32_t inactivity_timeout_ms = static_cast<uint32_t>(Settings::get().sleep_timeout_s * 1000.0f);
-            const bool sleep_allowed = inactivity_timeout_ms > 0 && !Configurator::active() && !NomadMode::enabled(); // 0 = never sleep
+            const bool sleep_allowed = inactivity_timeout_ms > 0 && !Configurator::active(); // 0 = never sleep
             if (sleep_allowed && !wake_grace_active && now - hidController.get_last_report_time_ms() > inactivity_timeout_ms) {
                 // Transition to SLEEP on inactivity.
                 // We can infer inactivity by checking time last HID report was sent
@@ -438,67 +412,12 @@ void loop()
         MAIN_LOG_PRINTLN("Right button released");
         buttons &= ~0x0002; // Clear bit 1 for right button release
     }
-    // Nomad mode: a long press of the right button toggles it while running
-    const bool running = current_state == StateMachine::State::RUNNING || current_state == StateMachine::State::RUNNING_WITHOUT_CALIBRATION;
-    if (right_button_state == ButtonController::ButtonState::LONG_PRESSED && running) {
-        set_nomad_mode(!NomadMode::enabled(), current_state);
-    }
-    if (NomadMode::enabled() && !running) {
-        set_nomad_mode(false, current_state); // e.g. calibration or sensor error
-    }
-
-    if (suppress_buttons_until_release && buttons == 0) {
-        suppress_buttons_until_release = false;
-    }
-    const uint16_t effective_buttons = suppress_buttons_until_release ? 0 : buttons;
-
-    // A short press of a knob button sends its Nomad shortcut on release; a long press does not
-    static bool button_long_pressed[2] = {false, false};
-    const ButtonController::ButtonState button_states[2] = {left_button_state, right_button_state};
-    for (int index = 0; index < 2; ++index) {
-        if (button_states[index] == ButtonController::ButtonState::PRESSED) {
-            button_long_pressed[index] = false;
-        }
-        else if (button_states[index] == ButtonController::ButtonState::LONG_PRESSED) {
-            button_long_pressed[index] = true;
-        }
-        else if (button_states[index] == ButtonController::ButtonState::RELEASED && !button_long_pressed[index] && !suppress_buttons_until_release) {
-            NomadMode::tap_button(index); // ignored unless Nomad mode is on
-        }
-    }
-
-    if (NomadMode::enabled() || NomadMode::busy()) {
-        NomadMode::update(micros(), latest_estimated_state);
-        const NomadMode::Report report = NomadMode::next_report();
-        bool sent = false;
-        if (report.kind == NomadMode::Report::Kind::MOUSE) {
-            sent = hidController.sendMouseReport(report.buttons, report.dx, report.dy, report.wheel);
-        }
-        else if (report.kind == NomadMode::Report::Kind::KEYBOARD) {
-            sent = hidController.sendKeyboardReport(report.modifier, report.key);
-        }
-        if (sent) {
-            NomadMode::report_sent();
-        }
-
-        // Keep the 3D mouse silent, otherwise 3DxWare and Nomad's own 3D mouse support act on it too
-        static float silent_state[12] = {0.0f};
-        hidController.sendReport(silent_state, 0, false);
-    }
-    else {
-        hidController.sendReport(latest_estimated_state, effective_buttons, false);
-    }
+    hidController.sendReport(latest_estimated_state, buttons, false);
 
     // Configurator page over USB serial
-    const Configurator::Request request = Configurator::poll(dipoleModel);
-    if (request == Configurator::Request::CALIBRATE && running) {
+    if (Configurator::poll(dipoleModel) == Configurator::Request::CALIBRATE &&
+        (current_state == StateMachine::State::RUNNING || current_state == StateMachine::State::RUNNING_WITHOUT_CALIBRATION)) {
         stateMachine.enter_CALIBRATE_COLLECT();
-    }
-    if (request == Configurator::Request::NOMAD_MODE_ON || request == Configurator::Request::NOMAD_MODE_OFF) {
-        if (running) {
-            set_nomad_mode(request == Configurator::Request::NOMAD_MODE_ON, current_state);
-        }
-        NomadMode::print_json(Serial);
     }
     Configurator::Telemetry telemetry;
     telemetry.state = static_cast<int>(stateMachine.get_state());
@@ -507,8 +426,6 @@ void loop()
     telemetry.raw_pose = latest_raw_pose;
     telemetry.output = latest_estimated_state;
     telemetry.buttons = buttons;
-    telemetry.nomad_mode = NomadMode::enabled();
-    telemetry.nomad_gesture = static_cast<uint8_t>(NomadMode::gesture());
     telemetry.filter_hz = filter_rate_hz;
     Configurator::stream(now, telemetry);
 

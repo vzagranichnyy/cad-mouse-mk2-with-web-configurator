@@ -53,15 +53,6 @@ namespace {
 
       HID_COLLECTION_END, // END_COLLECTION
     };
-
-    // Second interface (keyboard and mouse for Nomad mode)
-    const uint8_t REPORT_ID_KEYBOARD = 1;
-    const uint8_t REPORT_ID_MOUSE = 2;
-
-    const uint8_t input_report_descriptor[] = {
-      TUD_HID_REPORT_DESC_KEYBOARD(HID_REPORT_ID(REPORT_ID_KEYBOARD)),
-      TUD_HID_REPORT_DESC_MOUSE(HID_REPORT_ID(REPORT_ID_MOUSE)),
-    };
 }
 
 bool HIDController::begin()
@@ -76,11 +67,6 @@ bool HIDController::begin()
     m_hid.setReportDescriptor(hid_report_descriptor, sizeof(hid_report_descriptor));
     m_hid.setPollInterval(2); // Translation and rotation go out in consecutive polls; HID_REPORT_INTERVAL_MS paces the updates
     m_hid.begin();
-
-    // Separate keyboard and mouse interface for Nomad mode, so the 3D mouse interface stays unchanged
-    m_input.setReportDescriptor(input_report_descriptor, sizeof(input_report_descriptor));
-    m_input.setPollInterval(1);
-    m_input.begin();
 
     // If already enumerated, additional class driverr begin() e.g msc, hid, midi won't take effect until re-enumeration
     if (TinyUSBDevice.mounted()) {
@@ -167,46 +153,6 @@ void HIDController::sendReport(float filtered_state[12], uint16_t buttons, bool 
         task();
         m_last_sent_time_ms = now; // Update the timestamp of the last sent report
     }
-}
-
-bool HIDController::inputReady()
-{
-    task();
-    if (!TinyUSBDevice.mounted() || !m_input.ready()) {
-        return false;
-    }
-    if (TinyUSBDevice.suspended()) {
-        TinyUSBDevice.remoteWakeup();
-        return false;
-    }
-    return true;
-}
-
-bool HIDController::sendKeyboardReport(uint8_t modifier, uint8_t key)
-{
-    if (!inputReady()) {
-        return false;
-    }
-    uint8_t keys[6] = {key, 0, 0, 0, 0, 0};
-    if (!m_input.keyboardReport(REPORT_ID_KEYBOARD, modifier, keys)) {
-        return false;
-    }
-    task();
-    m_last_sent_time_ms = millis();
-    return true;
-}
-
-bool HIDController::sendMouseReport(uint8_t buttons, int8_t dx, int8_t dy, int8_t wheel)
-{
-    if (!inputReady()) {
-        return false;
-    }
-    if (!m_input.mouseReport(REPORT_ID_MOUSE, buttons, dx, dy, wheel, 0)) {
-        return false;
-    }
-    task();
-    m_last_sent_time_ms = millis();
-    return true;
 }
 
 uint32_t HIDController::get_last_report_time_ms()

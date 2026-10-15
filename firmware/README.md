@@ -92,7 +92,6 @@ restore the relevant permanent effect afterwards.
 | `LED_CALIBRATION_COLOR`                 | `0x0000FF` | Blue   | Full spinner               | Calibration in progress              |
 | `LED_RUNNING_COLOR`                     | `0xFFFFFF` | White  | Solid; optional input glow | Normal running with calibration      |
 | `LED_RUNNING_WITHOUT_CALIBRATION_COLOR` | `0xFF6600` | Orange | Solid                      | Running without calibration          |
-| `LED_NOMAD_MODE_COLOR`                  | `0x6000FF` | Violet | Solid                      | Nomad mode                           |
 | `LED_INPUT_GLOW_COLOR`                  | `0x00FFFF` | Cyan   | Dynamic input glow         | Input feedback during normal running |
 | internal `0x000000`                     | `0x000000` | Black  | Off                        | LEDs switched off, including sleep   |
 
@@ -113,8 +112,6 @@ unique for different events that use the same color.
 | `LED_CALIBRATION_FAILURE_COLOR` | `0xFF00FF` | Magenta |      5 | Fresh calibration failed; existing calibration remains active  |
 | `LED_CALIBRATION_FAILURE_COLOR` | `0xFF00FF` | Magenta |      6 | Fresh calibration failed; no calibration is available          |
 | `LED_SUCCESS_COLOR`             | `0x00FF00` | Green   |      2 | Fresh calibration succeeded and was saved                      |
-| `LED_NOMAD_MODE_COLOR`          | `0x6000FF` | Violet  |      3 | Nomad mode switched on (blinks 150 ms on / 150 ms off)         |
-| `LED_NOMAD_MODE_COLOR`          | `0x6000FF` | Violet  |      1 | Nomad mode switched off                                        |
 
 The blink code is unique for every event within a color. Filesystem and
 calibration-file failures intentionally use the same Magenta family because
@@ -157,40 +154,6 @@ on the sensitivity settings, and is stored in LittleFS (`/decoupling.bin`).
 With good decoupling `ISOLATION_POWER` can be lowered to about 1.5–2 for more
 natural combined movements.
 
-#### Nomad mode
-
-Nomad Sculpt (desktop) reads a 3D mouse on its own, while 3DxWare also turns
-the motion into mouse wheel events for it, and both act at the same time. In
-Nomad mode the knob instead drives Nomad's own mouse navigation, which is what
-its default bindings are built around:
-
-| Knob | Mouse | Nomad |
-| --- | --- | --- |
-| Twist (RZ) and sideways tilt (RY) | right button drag, horizontal | view_rotate |
-| Forward/backward tilt (RX) | right button drag, vertical | view_rotate |
-| Push sideways (X), pull up/press down (Z) | middle button drag | view_pan |
-| Push forward/backward (Y) | wheel | zoom |
-| Short press left / right button | Ctrl+Z / Ctrl+Space | undo / view_focus |
-
-A long press of the right button (1.5 s) or the page toggles the mode; the
-mouse always starts in CAD mode and does not sleep while the mode is on. The
-3D mouse interface sends nothing meanwhile, so neither 3DxWare nor Nomad's own
-3D mouse support act on the motion.
-
-The drags move the real cursor. It is kept within 100 px of where the gesture
-started: past that the button is released, the cursor moved back and the button
-pressed again, so a continuous rotation never hits a screen edge. When the knob
-returns to rest the button is released and the cursor moved back to where it
-was. Mouse and keyboard reports go through a separate interface, so the 3D
-mouse interface stays unchanged for 3DxWare.
-
-Each axis can be assigned to rotate, pan or zoom and inverted, the speeds, the
-mouse buttons (with an optional Ctrl/Shift/Alt modifier) and the shortcuts of
-the knob buttons can be changed on the page. The configuration is stored in
-LittleFS (`/nomad_mode.bin`). Building with `-DNOMAD_MODE_SELFTEST` adds an
-`nm_test` command that runs scripted knob input through the state machine and
-prints the resulting reports without sending anything over USB.
-
 #### Protocol
 
 The page talks a line-based protocol over the USB serial port; replies are
@@ -204,10 +167,8 @@ single-line JSON objects:
 | `dc_get` / `dc_set <36 values>` | Print or replace the decoupling matrix (row by row) |
 | `dc_on <0\|1>` | Apply or bypass the decoupling matrix |
 | `dc_save` / `dc_reload` / `dc_reset` | Store, reload the stored, or reset to identity (off) |
-| `nm_get` / `nm_set <24 values>` | Print or replace the Nomad mode configuration (order as in `lib/configurator/configurator.cpp`) |
-| `nm_on <0\|1>` / `nm_save` / `nm_defaults` | Toggle Nomad mode, store its configuration, or restore the Nomad defaults |
 | `info` | Firmware version, CPU clock, drive mode, calibrated magnetic moments and offsets |
-| `stream 1` / `stream 2` / `stream 0` | ~30 Hz telemetry (incl. Nomad mode and the current gesture); `2` adds the physical pose for the wizard; the mouse stays awake while streaming |
+| `stream 1` / `stream 2` / `stream 0` | ~30 Hz telemetry; `2` adds the physical pose for the wizard; the mouse stays awake while streaming |
 | `calibrate` | Start a calibration, same as a long press of both buttons |
 | `drive` / `reboot` | Reboot with or without the configurator drive |
 
