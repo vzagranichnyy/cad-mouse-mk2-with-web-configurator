@@ -38,8 +38,12 @@ namespace {
       HID_COLLECTION_END, // END_COLLECTION
     };
 
-    const uint8_t keyboard_report_descriptor[] = {
-      TUD_HID_REPORT_DESC_KEYBOARD(),
+    const uint8_t REPORT_ID_KEYBOARD = 1;
+    const uint8_t REPORT_ID_MOUSE = 2;
+
+    const uint8_t input_report_descriptor[] = {
+      TUD_HID_REPORT_DESC_KEYBOARD(HID_REPORT_ID(REPORT_ID_KEYBOARD)),
+      TUD_HID_REPORT_DESC_MOUSE(HID_REPORT_ID(REPORT_ID_MOUSE)),
     };
 }
 
@@ -56,11 +60,10 @@ bool HIDController::begin()
     m_hid.setPollInterval(HID_REPORT_INTERVAL_MS);
     m_hid.begin();
 
-    // Separate boot keyboard interface for game mode, so the 3D mouse interface stays unchanged
-    m_keyboard.setBootProtocol(HID_ITF_PROTOCOL_KEYBOARD);
-    m_keyboard.setReportDescriptor(keyboard_report_descriptor, sizeof(keyboard_report_descriptor));
-    m_keyboard.setPollInterval(2);
-    m_keyboard.begin();
+    // Separate keyboard and mouse interface for Nomad mode, so the 3D mouse interface stays unchanged
+    m_input.setReportDescriptor(input_report_descriptor, sizeof(input_report_descriptor));
+    m_input.setPollInterval(1);
+    m_input.begin();
 
     // If already enumerated, additional class driverr begin() e.g msc, hid, midi won't take effect until re-enumeration
     if (TinyUSBDevice.mounted()) {
@@ -137,27 +140,44 @@ void HIDController::sendReport(float filtered_state[12], uint16_t buttons, bool 
     m_last_sent_time_ms = now; // Update the timestamp of the last sent report
 }
 
-void HIDController::sendKeyboard(uint8_t modifier, const uint8_t keys[6])
+bool HIDController::inputReady()
 {
-    const bool changed = modifier != m_keyboard_modifier || memcmp(keys, m_keyboard_keys, 6) != 0;
-    if (!changed && !m_keyboard_pending) {
-        return;
-    }
-    m_keyboard_modifier = modifier;
-    memcpy(m_keyboard_keys, keys, 6);
-
     task();
-    if (!TinyUSBDevice.mounted() || !m_keyboard.ready()) {
-        m_keyboard_pending = true; // Retry on the next loop
-        return;
+    if (!TinyUSBDevice.mounted() || !m_input.ready()) {
+        return false;
     }
     if (TinyUSBDevice.suspended()) {
         TinyUSBDevice.remoteWakeup();
+        return false;
     }
-    m_keyboard.keyboardReport(0, m_keyboard_modifier, m_keyboard_keys);
+    return true;
+}
+
+bool HIDController::sendKeyboardReport(uint8_t modifier, uint8_t key)
+{
+    if (!inputReady()) {
+        return false;
+    }
+    uint8_t keys[6] = {key, 0, 0, 0, 0, 0};
+    if (!m_input.keyboardReport(REPORT_ID_KEYBOARD, modifier, keys)) {
+        return false;
+    }
     task();
-    m_keyboard_pending = false;
     m_last_sent_time_ms = millis();
+    return true;
+}
+
+bool HIDController::sendMouseReport(uint8_t buttons, int8_t dx, int8_t dy, int8_t wheel)
+{
+    if (!inputReady()) {
+        return false;
+    }
+    if (!m_input.mouseReport(REPORT_ID_MOUSE, buttons, dx, dy, wheel, 0)) {
+        return false;
+    }
+    task();
+    m_last_sent_time_ms = millis();
+    return true;
 }
 
 uint32_t HIDController::get_last_report_time_ms()

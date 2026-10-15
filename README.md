@@ -12,9 +12,10 @@ This repository builds on [sb-ocr/cad-mouse-mk2](https://github.com/sb-ocr/cad-m
   it also shows up as a read-only USB drive with the configurator page.
 - **Guided axis decoupling**: a 12-step wizard measures how the axes leak into
   each other and removes it with a 6x6 matrix, so the isolation can be relaxed.
-- **Game mode**: the knob and the buttons press keys (WASD, jump, crouch, lean,
-  ...) for Android emulators such as GameLoop; toggled with a long press of the
-  right button, keys bindable in the configurator.
+- **Nomad mode**: for Nomad Sculpt, whose 3D mouse support is unreliable, the
+  knob drives Nomad's own mouse navigation (right drag rotates, middle drag pans,
+  wheel zooms) and the buttons send undo and frame; toggled with a long press
+  of the right button.
 - **Fixes and tuning**: no lost button releases, faster wake from sleep, correct
   I2C clock after sleep on RP2040, calibrations stuck at their fit bounds are
   rejected, NaN guards kept under `-Ofast`, RP2040 overclocked to 200 MHz (filter
@@ -46,9 +47,8 @@ Russian). Nothing has to be installed, and it works offline.
   how the other axes respond and removes that with a 6x6 matrix stored in the
   mouse. Afterwards the isolation can be relaxed for more natural combined
   movements.
-- **Game mode**: bind a key to each of the 12 directions and both buttons, with
-  thresholds for translation and rotation. The default bindings match the
-  GameLoop key mapping for PUBG Mobile.
+- **Nomad mode**: assign each axis to rotate, pan or zoom, invert it, set the
+  speeds, the Nomad mouse buttons and the shortcuts of the knob buttons.
 
 **The page is also on the mouse.** Hold one button while plugging the mouse in
 and it additionally shows up as a read-only USB drive `CADMOUSE` with

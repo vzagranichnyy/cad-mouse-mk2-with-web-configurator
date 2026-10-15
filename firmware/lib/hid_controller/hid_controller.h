@@ -24,17 +24,18 @@ public:
     void task();
     void sendReport(float filtered_state[12], uint16_t buttons, bool forceUpdate);
 
-    // Keyboard interface for game mode; sends only when the keys change.
-    void sendKeyboard(uint8_t modifier, const uint8_t keys[6]);
+    // Keyboard and mouse on a second interface, for Nomad mode. Return false when the
+    // endpoint is busy, so the caller can retry on the next loop.
+    bool sendKeyboardReport(uint8_t modifier, uint8_t key);
+    bool sendMouseReport(uint8_t buttons, int8_t dx, int8_t dy, int8_t wheel);
 
     uint32_t get_last_report_time_ms();
 
 private:
     Adafruit_USBD_HID m_hid;
-    Adafruit_USBD_HID m_keyboard;
-    uint8_t m_keyboard_modifier{0};
-    uint8_t m_keyboard_keys[6]{};
-    bool m_keyboard_pending{false}; // last change not sent yet because the endpoint was busy
+    Adafruit_USBD_HID m_input; // keyboard (report 1) and mouse (report 2)
+
+    bool inputReady();
 
     uint32_t m_last_sent_time_ms{0}; // Timestamp of the last sent report
     ReportAxes m_report_axes;
