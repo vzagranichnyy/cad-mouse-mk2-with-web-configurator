@@ -1,28 +1,44 @@
 #include "hid_controller.h"
 
 namespace {
+    // Same layout as a real SpaceMouse Compact (256F:C635): translation in report 1,
+    // rotation in report 2, buttons in report 3. Software that reads the device directly
+    // by its product ID (e.g. Nomad Sculpt) expects the rotation in report 2.
+    const uint8_t REPORT_ID_TRANSLATION = 1;
+    const uint8_t REPORT_ID_ROTATION = 2;
+    const uint8_t REPORT_ID_BUTTONS = 3;
+
     const uint8_t hid_report_descriptor[] = {
       HID_USAGE_PAGE(HID_USAGE_PAGE_DESKTOP),             // USAGE_PAGE (Generic Desktop)
       HID_USAGE(HID_USAGE_DESKTOP_MULTI_AXIS_CONTROLLER), // USAGE (Multi-axis Controller)
       HID_COLLECTION(HID_COLLECTION_APPLICATION),         // COLLECTION (Application)
 
       HID_COLLECTION(HID_COLLECTION_PHYSICAL),           // COLLECTION (Physical)
-      HID_REPORT_ID(0x01)                                // REPORT_ID (1)
+      HID_REPORT_ID(REPORT_ID_TRANSLATION)               // REPORT_ID (1)
       HID_LOGICAL_MIN_N(-AXIS_LIMIT, 2),                 // LOGICAL_MINIMUM
       HID_LOGICAL_MAX_N(AXIS_LIMIT, 2),                  // LOGICAL_MAXIMUM
       HID_USAGE(HID_USAGE_DESKTOP_X),                    // USAGE (X)
       HID_USAGE(HID_USAGE_DESKTOP_Y),                    // USAGE (Y)
       HID_USAGE(HID_USAGE_DESKTOP_Z),                    // USAGE (Z)
+      HID_REPORT_SIZE(16),                               // REPORT_SIZE (16)
+      HID_REPORT_COUNT(3),                               // REPORT_COUNT (3)
+      HID_INPUT(HID_DATA | HID_VARIABLE | HID_ABSOLUTE), // INPUT (Data,Var,Abs)
+      HID_COLLECTION_END,                                // END_COLLECTION
+
+      HID_COLLECTION(HID_COLLECTION_PHYSICAL),           // COLLECTION (Physical)
+      HID_REPORT_ID(REPORT_ID_ROTATION)                  // REPORT_ID (2)
+      HID_LOGICAL_MIN_N(-AXIS_LIMIT, 2),                 // LOGICAL_MINIMUM
+      HID_LOGICAL_MAX_N(AXIS_LIMIT, 2),                  // LOGICAL_MAXIMUM
       HID_USAGE(HID_USAGE_DESKTOP_RX),                   // USAGE (Rx)
       HID_USAGE(HID_USAGE_DESKTOP_RY),                   // USAGE (Ry)
       HID_USAGE(HID_USAGE_DESKTOP_RZ),                   // USAGE (Rz)
       HID_REPORT_SIZE(16),                               // REPORT_SIZE (16)
-      HID_REPORT_COUNT(6),                               // REPORT_COUNT (6)
+      HID_REPORT_COUNT(3),                               // REPORT_COUNT (3)
       HID_INPUT(HID_DATA | HID_VARIABLE | HID_ABSOLUTE), // INPUT (Data,Var,Abs)
       HID_COLLECTION_END,                                // END_COLLECTION
 
       HID_COLLECTION(HID_COLLECTION_PHYSICAL),            // COLLECTION (Physical)
-      HID_REPORT_ID(0x03)                                 // REPORT_ID (3)
+      HID_REPORT_ID(REPORT_ID_BUTTONS)                    // REPORT_ID (3)
       HID_USAGE_PAGE(HID_USAGE_PAGE_BUTTON),              // USAGE_PAGE (Button)
       HID_USAGE_MIN(1),                                   // USAGE_MINIMUM (Button 1)
       HID_USAGE_MAX(2),                                   // USAGE_MAXIMUM (Button 2)
@@ -38,6 +54,7 @@ namespace {
       HID_COLLECTION_END, // END_COLLECTION
     };
 
+    // Second interface (keyboard and mouse for Nomad mode)
     const uint8_t REPORT_ID_KEYBOARD = 1;
     const uint8_t REPORT_ID_MOUSE = 2;
 
@@ -57,7 +74,7 @@ bool HIDController::begin()
 
     // Initialize the HID device with the report descriptor
     m_hid.setReportDescriptor(hid_report_descriptor, sizeof(hid_report_descriptor));
-    m_hid.setPollInterval(HID_REPORT_INTERVAL_MS);
+    m_hid.setPollInterval(2); // Translation and rotation go out in consecutive polls; HID_REPORT_INTERVAL_MS paces the updates
     m_hid.begin();
 
     // Separate keyboard and mouse interface for Nomad mode, so the 3D mouse interface stays unchanged
@@ -110,16 +127,27 @@ void HIDController::sendReport(float filtered_state[12], uint16_t buttons, bool 
         return; // HID device not ready to send report
     }
 
+    // One report per call, only when the endpoint is free, so none is dropped.
     const uint32_t now = millis();
+
+    // The rotation half of the last axes update goes out first
+    if (m_rotation_pending) {
+        if (m_hid.sendReport(REPORT_ID_ROTATION, &m_report_axes.rx, 3 * sizeof(int16_t))) {
+            m_rotation_pending = false;
+            task();
+        }
+        return;
+    }
 
     // Button report only sent when changed, regardless of HID_REPORT_INTERVAL_MS
     ReportButtons new_buttons = makeReportButtons(buttons);
-    bool buttons_changed = buttonsChanged(new_buttons);
-    if (buttons_changed) {
-        m_report_buttons = new_buttons;
-        m_hid.sendReport(0x03, &m_report_buttons, sizeof(m_report_buttons));
-        task();
-        m_last_sent_time_ms = now; // Update the timestamp of the last sent report
+    if (buttonsChanged(new_buttons)) {
+        if (m_hid.sendReport(REPORT_ID_BUTTONS, &new_buttons, sizeof(new_buttons))) {
+            m_report_buttons = new_buttons;
+            task();
+            m_last_sent_time_ms = now; // Update the timestamp of the last sent report
+        }
+        return;
     }
 
     // Check if enough time has passed since the last axes report was sent
@@ -132,12 +160,13 @@ void HIDController::sendReport(float filtered_state[12], uint16_t buttons, bool 
         return;
     }
 
-    // Sent axes report
-    m_report_axes = new_axes;
-    m_hid.sendReport(0x01, &m_report_axes, sizeof(m_report_axes));
-    task();
-
-    m_last_sent_time_ms = now; // Update the timestamp of the last sent report
+    // Translation now, rotation on the next poll
+    if (m_hid.sendReport(REPORT_ID_TRANSLATION, &new_axes.x, 3 * sizeof(int16_t))) {
+        m_report_axes = new_axes;
+        m_rotation_pending = true;
+        task();
+        m_last_sent_time_ms = now; // Update the timestamp of the last sent report
+    }
 }
 
 bool HIDController::inputReady()

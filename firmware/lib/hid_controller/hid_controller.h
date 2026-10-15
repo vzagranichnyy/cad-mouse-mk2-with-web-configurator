@@ -40,6 +40,7 @@ private:
     uint32_t m_last_sent_time_ms{0}; // Timestamp of the last sent report
     ReportAxes m_report_axes;
     ReportButtons m_report_buttons;
+    bool m_rotation_pending{false}; // translation (report 1) sent, rotation (report 2) not yet
 
     ReportAxes makeReportAxes(float filtered_state[12]);
     ReportButtons makeReportButtons(uint16_t buttons);

@@ -22,7 +22,9 @@ This repository builds on [sb-ocr/cad-mouse-mk2](https://github.com/sb-ocr/cad-m
   ~4.7 ms instead of ~6.6 ms), optional auto zero and cross-axis deadzone.
 
 The USB VID/PID are set to the 3Dconnexion SpaceMouse Compact (`256F:C635`), so
-3DxWare picks the mouse up. See the [firmware documentation](./firmware/README.md)
+3DxWare picks the mouse up, and the reports use the same layout as that device
+(translation in report 1, rotation in report 2, buttons in report 3), so software
+that reads the device directly, such as Nomad Sculpt, also sees the rotation. See the [firmware documentation](./firmware/README.md)
 for details.
 
 ## Web configurator
